@@ -53,7 +53,12 @@ describe('VideoSelectorService', () => {
 
     test('should delete file in production mode', () => {
       const originalNodeEnv = process.env.NODE_ENV;
+      const originalInstagramToken = process.env.INSTAGRAM_ACCESS_TOKEN;
+      const originalInstagramUserId = process.env.INSTAGRAM_USER_ID;
+      
       process.env.NODE_ENV = 'production';
+      process.env.INSTAGRAM_ACCESS_TOKEN = 'test-token';
+      process.env.INSTAGRAM_USER_ID = 'test-user-id';
       
       try {
         const service = new VideoSelectorService();
@@ -70,8 +75,10 @@ describe('VideoSelectorService', () => {
         
         expect(fs.existsSync(testFile)).toBe(false);
       } finally {
-        // Restore original NODE_ENV
+        // Restore original env vars
         process.env.NODE_ENV = originalNodeEnv;
+        process.env.INSTAGRAM_ACCESS_TOKEN = originalInstagramToken;
+        process.env.INSTAGRAM_USER_ID = originalInstagramUserId;
       }
     });
 

@@ -6,9 +6,8 @@ This guide walks you through deploying the Instagram Reels automation service to
 
 - Digital Ocean account
 - GitHub repository with this code
-- Google Cloud Storage bucket with videos
-- Buffer API access
-- GCS service account JSON key
+- Google Cloud Storage bucket with videos (public read/write)
+- Instagram Business or Creator account with Meta App
 
 ## Step 1: Prepare Your Repository
 
@@ -43,12 +42,12 @@ git push -u origin main
 
 **Security Note**: Videos will be publicly accessible. Use non-obvious filenames (UUIDs) for security.
 
-## Step 3: Set Up Buffer API
+## Step 3: Set Up Instagram Graph API
 
-1. Create a Buffer account and go to [https://buffer.com/developers](https://buffer.com/developers)
-2. Create a new app to get your API credentials
-3. Generate an access token
-4. Get your Instagram profile ID from the Buffer API
+1. Go to [Meta for Developers](https://developers.facebook.com) and create a Business-type app
+2. Add the "Instagram Graph API" product to your app
+3. Get your access token with `instagram_content_publish` permission
+4. Get your Instagram User ID (see SETUP.md for detailed instructions)
 
 ## Step 4: Deploy to Digital Ocean
 
@@ -91,8 +90,8 @@ In the Digital Ocean App Platform dashboard, add these environment variables as 
 | `NODE_ENV` | `production` | Plain |
 | `GCS_PROJECT_ID` | Your GCP project ID | Secret |
 | `GCS_BUCKET_NAME` | Your GCS bucket name | Secret |
-| `BUFFER_ACCESS_TOKEN` | Your Buffer API token | Secret |
-| `BUFFER_PROFILE_ID` | Your Buffer profile ID | Secret |
+| `INSTAGRAM_ACCESS_TOKEN` | Your Instagram API token | Secret |
+| `INSTAGRAM_USER_ID` | Your Instagram User ID | Secret |
 | `TEMP_DIR` | `/app/tmp` | Plain |
 
 **Note**: No GCS key file needed - bucket uses public access.
@@ -156,7 +155,7 @@ curl -X POST https://post-for-me-xxxxx.ondigitalocean.app/api/post-reel \
 
 3. **Rate Limiting**:
    - Consider adding rate limiting if exposing publicly
-   - Buffer API has rate limits (check their docs)
+   - Instagram API has rate limits (check Meta docs)
 
 ## Troubleshooting
 
@@ -171,10 +170,10 @@ curl -X POST https://post-for-me-xxxxx.ondigitalocean.app/api/post-reel \
 - Check that bucket name is correct
 - Ensure videos are uploaded to the bucket
 
-**Buffer API errors**
-- Verify your access token is valid
-- Check that the profile ID is correct
-- Ensure Buffer subscription supports video uploads
+**Instagram API errors**
+- Verify your access token is valid (expires after 60 days)
+- Check that the User ID is correct
+- Ensure your account is a Business or Creator account
 
 **Video processing timeout**
 - Increase instance size for more CPU
@@ -197,17 +196,14 @@ doctl apps logs YOUR_APP_ID --follow
 
 ## Future Enhancements
 
-When ready to migrate to Instagram Graph API:
-
-1. Create a Facebook App
-2. Get Instagram Business Account access
-3. Replace Buffer API calls with Instagram Graph API
-4. Add analytics tracking
-5. Implement webhook handlers for post status updates
+1. Add Instagram Insights API for analytics tracking
+2. Implement webhook handlers for post status updates
+3. Add support for scheduled posting
+4. Implement token refresh automation
 
 ## Support
 
 For issues:
 - Check Digital Ocean logs
 - Review this documentation
-- Check GCS and Buffer API documentation
+- Check GCS and Instagram Graph API documentation

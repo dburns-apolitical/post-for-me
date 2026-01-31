@@ -6,8 +6,8 @@ Get up and running with the Instagram Reels automation in 5 minutes!
 
 - Bun installed
 - ffmpeg installed
-- GCS bucket with videos
-- Buffer API credentials
+- GCS bucket with videos (public read/write)
+- Instagram Business/Creator account with Meta App
 
 ## 1. Install Dependencies
 
@@ -24,9 +24,9 @@ cp .env.example .env
 
 Required values:
 - `GCS_PROJECT_ID` - Your Google Cloud project ID
-- `GCS_BUCKET_NAME` - Your GCS bucket name (must be publicly readable)
-- `BUFFER_ACCESS_TOKEN` - Your Buffer API token
-- `BUFFER_PROFILE_ID` - Your Instagram profile ID on Buffer
+- `GCS_BUCKET_NAME` - Your GCS bucket name (must be publicly accessible)
+- `INSTAGRAM_ACCESS_TOKEN` - Your Instagram Graph API token
+- `INSTAGRAM_USER_ID` - Your Instagram Business Account ID
 
 ## 3. Run Tests
 
@@ -93,9 +93,9 @@ brew install ffmpeg  # macOS
 - Verify bucket is publicly readable (Permissions > allUsers > Storage Object Viewer)
 - Check bucket name is correct
 
-**Buffer API errors**
-- Verify token is valid
-- Check profile ID is for Instagram
+**Instagram API errors**
+- Verify token is valid (expires after 60 days)
+- Check User ID is your Instagram Business Account ID
 
 ---
 

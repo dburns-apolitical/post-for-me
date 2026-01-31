@@ -1,20 +1,20 @@
 # Post For Me - Instagram Reels Automation
 
-Automated Instagram Reels posting service that selects videos from Google Cloud Storage, adds text overlays, and posts via Buffer API.
+Automated Instagram Reels posting service that selects videos from Google Cloud Storage, adds text overlays, and posts directly via Instagram Graph API.
 
 ## Features
 
 - HTTP API endpoint for triggering posts via curl
 - Random video selection from Google Cloud Storage
 - Automatic text overlay on videos using ffmpeg
-- Integration with Buffer API for Instagram posting
+- Direct Instagram Graph API integration for posting Reels
 - Built with Bun and TypeScript
 
 ## Prerequisites
 
 - [Bun](https://bun.sh/) installed
-- Google Cloud Storage account with service account credentials
-- Buffer account with API access
+- Google Cloud Storage bucket (public read/write)
+- Instagram Business or Creator account with Meta App
 - ffmpeg installed (for video processing)
 
 ## Installation
@@ -39,10 +39,10 @@ NODE_ENV=development
 
 GCS_PROJECT_ID=your-gcp-project-id
 GCS_BUCKET_NAME=your-video-bucket-name
-# Note: Bucket must be publicly readable
+# Note: Bucket must be publicly readable AND writable
 
-BUFFER_ACCESS_TOKEN=your-buffer-access-token
-BUFFER_PROFILE_ID=your-instagram-profile-id
+INSTAGRAM_ACCESS_TOKEN=your-instagram-access-token
+INSTAGRAM_USER_ID=your-instagram-user-id
 
 TEMP_DIR=./tmp
 ```
@@ -98,7 +98,7 @@ Create and post an Instagram Reel.
 ```json
 {
   "success": true,
-  "postId": "buffer-post-id",
+  "postId": "instagram-media-id",
   "videoUsed": "gs://bucket/video-name.mp4"
 }
 ```
@@ -128,9 +128,9 @@ post-for-me/
 │   ├── routes/
 │   │   └── post-reel.ts      # POST endpoint handler
 │   ├── services/
-│   │   ├── video-selector.ts # GCS video selection
-│   │   ├── video-editor.ts   # ffmpeg text overlay
-│   │   └── buffer-client.ts  # Buffer API integration
+│   │   ├── video-selector.ts   # GCS video selection
+│   │   ├── video-editor.ts     # ffmpeg text overlay
+│   │   └── instagram-client.ts # Instagram Graph API
 │   ├── types/
 │   │   └── index.ts          # TypeScript interfaces
 │   ├── utils/
@@ -151,7 +151,7 @@ This project was built incrementally in phases:
 1. ✅ Basic HTTP server with validation
 2. ✅ Google Cloud Storage integration
 3. ✅ Video editing with ffmpeg
-4. ✅ Buffer API integration
+4. ✅ Instagram Graph API integration
 5. ✅ End-to-end integration
 6. ✅ Deployment configuration
 
@@ -239,8 +239,14 @@ The app will automatically:
        │
        ▼
 ┌──────────────────┐
-│  Buffer Client   │
-│  (Upload & Post) │
+│  GCS Upload      │
+│  (edited/ folder)│
+└──────┬───────────┘
+       │
+       ▼
+┌──────────────────┐
+│ Instagram Client │
+│  (Graph API)     │
 └──────┬───────────┘
        │
        ▼
@@ -269,10 +275,11 @@ Install ffmpeg: `brew install ffmpeg` (macOS) or see Dockerfile for Linux
 - Verify bucket name is correct
 - Ensure videos are uploaded
 
-### Buffer API errors
-- Verify your access token is valid
-- Check that your Buffer plan supports video uploads
-- Ensure the profile ID is for an Instagram account
+### Instagram API errors
+- Verify your access token is valid (tokens expire after 60 days)
+- Ensure your Instagram account is a Business or Creator account
+- Check that your Meta App has `instagram_content_publish` permission
+- Verify the User ID matches your Instagram Business Account ID
 
 ### Video processing slow
 - Use smaller videos (< 60 seconds, < 50MB)
@@ -281,8 +288,7 @@ Install ffmpeg: `brew install ffmpeg` (macOS) or see Dockerfile for Linux
 
 ## Future Enhancements
 
-- [ ] Direct Instagram Graph API integration
-- [ ] Analytics and performance tracking
+- [ ] Analytics and performance tracking via Instagram Insights API
 - [ ] Webhook support for post status updates
 - [ ] Video format auto-conversion
 - [ ] Scheduled posting support

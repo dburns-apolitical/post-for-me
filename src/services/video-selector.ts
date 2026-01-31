@@ -39,12 +39,14 @@ export class VideoSelectorService {
             const data = await response.json() as { items?: Array<{ name: string; timeCreated: string }> };
             const items = data.items || [];
 
-            // Filter for video files
+            // Filter for video files (excluding edited/ folder)
             const videoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm'];
             const videoFiles: VideoFile[] = items
                 .filter((file: any) => {
                     const ext = path.extname(file.name).toLowerCase();
-                    return videoExtensions.includes(ext);
+                    const isVideo = videoExtensions.includes(ext);
+                    const isInEditedFolder = file.name.startsWith('edited/');
+                    return isVideo && !isInEditedFolder;
                 })
                 .map((file: any) => ({
                     name: file.name,
@@ -210,6 +212,51 @@ export class VideoSelectorService {
                 filePath,
                 error: error instanceof Error ? error.message : 'Unknown error',
             });
+        }
+    }
+
+    /**
+     * Upload an edited video to GCS (in edited/ folder) and return the public URL
+     * Videos in edited/ folder won't be picked up by listVideos()
+     */
+    async uploadEditedVideo(localPath: string): Promise<string> {
+        try {
+            const fileName = path.basename(localPath);
+            const gcsPath = `edited/${fileName}`;
+            const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${this.bucketName}/o?uploadType=media&name=${encodeURIComponent(gcsPath)}`;
+
+            // Read the file
+            const fileBuffer = fs.readFileSync(localPath);
+
+            const response = await fetch(uploadUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'video/mp4',
+                },
+                body: fileBuffer,
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`GCS upload failed: ${response.status} ${errorText}`);
+            }
+
+            const publicUrl = `https://storage.googleapis.com/${this.bucketName}/${gcsPath}`;
+
+            logger.info('Edited video uploaded to GCS', {
+                localPath,
+                gcsPath,
+                publicUrl,
+                size: fileBuffer.length,
+            });
+
+            return publicUrl;
+        } catch (error) {
+            logger.error('Error uploading edited video to GCS', {
+                error: error instanceof Error ? error.message : 'Unknown error',
+                localPath,
+            });
+            throw new Error('Failed to upload edited video to storage');
         }
     }
 }

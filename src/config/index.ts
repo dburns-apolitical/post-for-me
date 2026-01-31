@@ -4,8 +4,8 @@ export function getConfig(): Config {
     const requiredEnvVars = [
         'GCS_PROJECT_ID',
         'GCS_BUCKET_NAME',
-        'BUFFER_ACCESS_TOKEN',
-        'BUFFER_PROFILE_ID',
+        'INSTAGRAM_ACCESS_TOKEN',
+        'INSTAGRAM_USER_ID',
     ];
 
     const missing = requiredEnvVars.filter((varName) => !process.env[varName]);
@@ -22,9 +22,9 @@ export function getConfig(): Config {
             bucketName: process.env.GCS_BUCKET_NAME || '',
             keyFilePath: '', // No longer needed for public bucket access
         },
-        buffer: {
-            accessToken: process.env.BUFFER_ACCESS_TOKEN || '',
-            profileId: process.env.BUFFER_PROFILE_ID || '',
+        instagram: {
+            accessToken: process.env.INSTAGRAM_ACCESS_TOKEN || '',
+            userId: process.env.INSTAGRAM_USER_ID || '',
         },
         tempDir: process.env.TEMP_DIR || './tmp',
         historyFilePath: process.env.HISTORY_FILE_PATH || './data/history.json',

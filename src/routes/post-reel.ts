@@ -3,7 +3,7 @@ import { validatePostReelRequest } from '../utils/validation.js';
 import type { PostReelResponse } from '../types/index.js';
 import { VideoSelectorService } from '../services/video-selector.js';
 import { VideoEditorService } from '../services/video-editor.js';
-import { BufferClientService } from '../services/buffer-client.js';
+import { InstagramClientService } from '../services/instagram-client.js';
 import { HistoryStoreService } from '../services/history-store.js';
 
 export async function handlePostReel(request: Request): Promise<Response> {
@@ -32,7 +32,7 @@ export async function handlePostReel(request: Request): Promise<Response> {
         // Initialize services
         const videoSelector = new VideoSelectorService();
         const videoEditor = new VideoEditorService();
-        const bufferClient = new BufferClientService();
+        const instagramClient = new InstagramClientService();
         const historyStore = new HistoryStoreService();
 
         // Get values from request or auto-select from history
@@ -128,32 +128,40 @@ export async function handlePostReel(request: Request): Promise<Response> {
             editedPath: editedVideoPath,
         });
 
-        // Step 4: Upload and post to Buffer
-        logger.info('Step 4: Uploading video to Buffer and creating post');
-        const bufferPost = await bufferClient.postVideo(
-            editedVideoPath,
+        // Step 4: Upload edited video to GCS
+        logger.info('Step 4: Uploading edited video to GCS');
+        const videoUrl = await videoSelector.uploadEditedVideo(editedVideoPath);
+
+        logger.info('Edited video uploaded', {
+            videoUrl,
+        });
+
+        // Step 5: Post to Instagram
+        logger.info('Step 5: Posting Reel to Instagram');
+        const instagramPost = await instagramClient.postReel(
+            videoUrl,
             caption,
             hashtags
         );
 
-        logger.info('Post created successfully', {
-            postId: bufferPost.id,
-            status: bufferPost.status,
+        logger.info('Reel posted successfully', {
+            postId: instagramPost.id,
+            status: instagramPost.status,
         });
 
-        // Step 5: Save post to history
-        logger.info('Step 5: Saving post to history');
+        // Step 6: Save post to history
+        logger.info('Step 6: Saving post to history');
         historyStore.addPost(videoFile.name, caption, hookText, hashtags);
 
-        // Step 6: Cleanup temporary files
-        logger.info('Step 6: Cleaning up temporary files');
+        // Step 7: Cleanup temporary files
+        logger.info('Step 7: Cleaning up temporary files');
         videoSelector.cleanupTempFile(inputVideoPath);
         videoEditor.cleanupTempFile(editedVideoPath);
 
         // Return success response
         const response: PostReelResponse = {
             success: true,
-            postId: bufferPost.id,
+            postId: instagramPost.id,
             videoUsed: videoFile.path,
         };
 

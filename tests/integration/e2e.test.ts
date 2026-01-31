@@ -68,7 +68,7 @@ describe('End-to-End Integration Tests', () => {
   describe('POST /api/post-reel - Full Flow', () => {
     // Note: This test requires:
     // - Valid GCS credentials and bucket with videos
-    // - Valid Buffer API credentials
+    // - Valid Instagram Graph API credentials
     // - ffmpeg installed
     // For CI/CD, these would be mocked or run in a staging environment
 

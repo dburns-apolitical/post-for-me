@@ -18,10 +18,10 @@ export interface VideoFile {
     createdAt: Date;
 }
 
-export interface BufferPost {
+export interface InstagramPost {
     id: string;
     status: string;
-    scheduledAt?: string;
+    containerId: string;
 }
 
 export interface Config {
@@ -32,9 +32,9 @@ export interface Config {
         bucketName: string;
         keyFilePath: string;
     };
-    buffer: {
+    instagram: {
         accessToken: string;
-        profileId: string;
+        userId: string;
     };
     tempDir: string;
     historyFilePath: string;

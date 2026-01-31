@@ -17,8 +17,8 @@ docker run -d \
   -e GCS_PROJECT_ID="${GCS_PROJECT_ID:-test-project}" \
   -e GCS_BUCKET_NAME="${GCS_BUCKET_NAME:-test-bucket}" \
   -e GCS_KEY_FILE_PATH=/app/gcs-key.json \
-  -e BUFFER_ACCESS_TOKEN="${BUFFER_ACCESS_TOKEN:-test-token}" \
-  -e BUFFER_PROFILE_ID="${BUFFER_PROFILE_ID:-test-profile}" \
+  -e INSTAGRAM_ACCESS_TOKEN="${INSTAGRAM_ACCESS_TOKEN:-test-token}" \
+  -e INSTAGRAM_USER_ID="${INSTAGRAM_USER_ID:-test-user-id}" \
   -e TEMP_DIR=/app/tmp \
   post-for-me:local
 

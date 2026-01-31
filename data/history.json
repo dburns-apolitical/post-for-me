@@ -1,6 +1,16 @@
 {
-  "postedVideos": [],
-  "captions": [],
-  "hookTexts": [],
-  "hashtags": []
+  "postedVideos": [
+    "ch-1.mp4"
+  ],
+  "captions": [
+    "Your main caption here"
+  ],
+  "hookTexts": [
+    "Text to overlay on video that is too long and probably doesnt fit on the screen i wonder how we handle this, will it fit?"
+  ],
+  "hashtags": [
+    "reel",
+    "content",
+    "viral"
+  ]
 }

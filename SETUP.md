@@ -9,7 +9,8 @@ Before you begin, ensure you have:
 - [ ] Bun installed (`curl -fsSL https://bun.sh/install | bash`)
 - [ ] ffmpeg installed (`brew install ffmpeg` on macOS)
 - [ ] Google Cloud account with a project
-- [ ] Buffer account (supports Instagram video posting)
+- [ ] Instagram Business or Creator account
+- [ ] Meta Developer account with an app
 - [ ] Digital Ocean account (for deployment)
 - [ ] Git and GitHub account
 
@@ -44,11 +45,11 @@ NODE_ENV=development
 # Google Cloud Storage (Public Bucket)
 GCS_PROJECT_ID=your-gcp-project-id
 GCS_BUCKET_NAME=your-video-bucket-name
-# Note: Bucket must be publicly readable
+# Note: Bucket must be publicly readable AND writable for edited videos
 
-# Buffer API
-BUFFER_ACCESS_TOKEN=your-buffer-token
-BUFFER_PROFILE_ID=your-instagram-profile-id
+# Instagram Graph API
+INSTAGRAM_ACCESS_TOKEN=your-instagram-access-token
+INSTAGRAM_USER_ID=your-instagram-user-id
 
 # Temp directory
 TEMP_DIR=./tmp
@@ -118,40 +119,59 @@ bun run dev
 # This should work once the service is integrated
 ```
 
-## Step 3: Buffer API Setup
+## Step 3: Instagram Graph API Setup
 
-### 3.1 Create Buffer Account
+### 3.1 Prerequisites
 
-1. Sign up at [Buffer.com](https://buffer.com)
-2. Connect your Instagram Business account
-3. Verify you can post videos (requires appropriate Buffer plan)
+1. **Instagram Business or Creator Account**: Convert your personal Instagram account to a Business or Creator account
+2. **Facebook Page**: Your Instagram account must be connected to a Facebook Page
 
-### 3.2 Get API Credentials
+### 3.2 Create Meta App
 
-1. Go to [Buffer Developers](https://buffer.com/developers)
-2. Create a new app
-3. Generate an access token
-4. Note your access token
+1. Go to [Meta for Developers](https://developers.facebook.com)
+2. Create a new app (select "Business" type)
+3. Add the "Instagram Graph API" product to your app
+4. Configure Instagram Business Login or Facebook Login
 
-### 3.3 Get Profile ID
+### 3.3 Get Access Token
 
-You can get your profile ID via the Buffer API:
+1. In the Meta App Dashboard, go to Tools > Graph API Explorer
+2. Select your app
+3. Add the following permissions:
+   - `instagram_content_publish`
+   - `instagram_basic`
+4. Generate an access token
+5. For production, convert to a long-lived token (valid for 60 days)
 
+To get a long-lived token:
 ```bash
-# Replace YOUR_TOKEN with your actual token
-curl https://api.bufferapp.com/1/profiles.json?access_token=YOUR_TOKEN
+curl -X GET "https://graph.facebook.com/v18.0/oauth/access_token?grant_type=fb_exchange_token&client_id=YOUR_APP_ID&client_secret=YOUR_APP_SECRET&fb_exchange_token=YOUR_SHORT_LIVED_TOKEN"
 ```
 
-Look for your Instagram profile in the response and note the `id` field.
+### 3.4 Get Instagram User ID
 
-### 3.4 Update Environment Variables
+Get your Instagram Business Account ID:
+
+```bash
+curl -X GET "https://graph.facebook.com/v18.0/me/accounts?access_token=YOUR_ACCESS_TOKEN"
+```
+
+Then get the Instagram account ID connected to your page:
+
+```bash
+curl -X GET "https://graph.facebook.com/v18.0/PAGE_ID?fields=instagram_business_account&access_token=YOUR_ACCESS_TOKEN"
+```
+
+The `instagram_business_account.id` is your Instagram User ID.
+
+### 3.5 Update Environment Variables
 
 Add to your `.env` file:
 ```bash
 GCS_PROJECT_ID=your-gcp-project-id
 GCS_BUCKET_NAME=your-video-bucket-name
-BUFFER_ACCESS_TOKEN=your_actual_token_here
-BUFFER_PROFILE_ID=your_instagram_profile_id_here
+INSTAGRAM_ACCESS_TOKEN=your_long_lived_token_here
+INSTAGRAM_USER_ID=your_instagram_user_id_here
 ```
 
 ## Step 4: Test End-to-End
@@ -255,10 +275,11 @@ sudo apt-get update && sudo apt-get install ffmpeg
 - Check bucket name is correct
 - Ensure videos are in the bucket root or accessible paths
 
-#### Buffer API Errors
-- Verify access token is valid (not expired)
-- Check Buffer plan supports video uploads
-- Ensure profile ID is for Instagram (not Twitter, LinkedIn, etc.)
+#### Instagram API Errors
+- Verify access token is valid (not expired - tokens last 60 days)
+- Ensure your Instagram account is a Business or Creator account
+- Check that the User ID matches your Instagram Business Account ID
+- Verify your app has `instagram_content_publish` permission
 
 #### Tests Failing
 ```bash
@@ -286,7 +307,8 @@ bun test
 
 2. Common log messages:
    - "Failed to list videos from storage" → GCS issue
-   - "Failed to upload media to Buffer" → Buffer API issue
+   - "Failed to create media container on Instagram" → Instagram API issue
+   - "Failed to upload edited video to storage" → GCS upload permission issue
    - "Error editing video" → ffmpeg issue
 
 ## Next Steps
@@ -296,16 +318,16 @@ After successful setup:
 1. **Automate Posting**: Set up a cron job or scheduler to call the API
 2. **Monitor**: Set up logging and monitoring (DataDog, LogDNA, etc.)
 3. **Scale**: Increase instance size if needed
-4. **Analytics**: Plan migration to Instagram Graph API for analytics
+4. **Analytics**: Use Instagram Graph API for insights and analytics
 5. **Enhance**: Add features like scheduled posts, multiple text styles, etc.
 
 ## Security Checklist
 
 - [ ] `.env` file is in `.gitignore`
-- [ ] GCS service account key is NOT committed
-- [ ] Buffer API token is encrypted in DO
+- [ ] GCS bucket has appropriate access controls
+- [ ] Instagram access token is encrypted in DO
 - [ ] API endpoint has rate limiting (optional but recommended)
-- [ ] Secrets are rotated regularly
+- [ ] Secrets are rotated regularly (Instagram tokens expire every 60 days)
 
 ## Development Workflow
 

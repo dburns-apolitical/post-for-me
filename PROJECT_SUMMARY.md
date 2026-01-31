@@ -11,13 +11,14 @@ A complete TypeScript/Bun service that automates Instagram Reels posting with th
 1. **API Endpoint** receives caption, hook text, and hashtags via HTTP POST
 2. **Video Selection** randomly picks a video from Google Cloud Storage
 3. **Video Editing** adds text overlay using ffmpeg
-4. **Post Creation** uploads to Buffer and posts to Instagram
-5. **Cleanup** removes temporary files after processing
+4. **GCS Upload** uploads edited video to GCS for public access
+5. **Instagram Posting** posts Reel directly via Instagram Graph API
+6. **Cleanup** removes temporary files after processing
 
 ## 🏗️ Architecture
 
 ```
-User (cURL) → Bun Server → Video Selector (GCS) → Video Editor (ffmpeg) → Buffer Client → Instagram
+User (cURL) → Bun Server → Video Selector (GCS) → Video Editor (ffmpeg) → GCS Upload → Instagram Graph API
 ```
 
 ## 📁 Project Structure
@@ -29,9 +30,9 @@ post-for-me/
 │   ├── config/index.ts           # Environment configuration
 │   ├── routes/post-reel.ts       # API endpoint handler
 │   ├── services/
-│   │   ├── video-selector.ts    # GCS integration
+│   │   ├── video-selector.ts    # GCS integration + upload
 │   │   ├── video-editor.ts      # ffmpeg video processing
-│   │   └── buffer-client.ts     # Buffer API client
+│   │   └── instagram-client.ts  # Instagram Graph API client
 │   ├── types/index.ts            # TypeScript types
 │   └── utils/
 │       ├── validation.ts         # Zod schemas
@@ -58,8 +59,8 @@ post-for-me/
 - ✅ Input validation with Zod
 - ✅ Random video selection from GCS
 - ✅ Text overlay on videos
-- ✅ Buffer API integration
-- ✅ Instagram posting via Buffer
+- ✅ Instagram Graph API integration
+- ✅ Direct Instagram Reels posting
 - ✅ Automatic file cleanup
 
 ### Technical Features
@@ -84,7 +85,7 @@ post-for-me/
 | Validation | 9 | ✅ Pass |
 | Video Selector | 4 | ✅ Pass |
 | Video Editor | 2 | ✅ Pass |
-| Buffer Client | 2 | ✅ Pass |
+| Instagram Client | 2 | ✅ Pass |
 | API Integration | 11 | ✅ Pass |
 | **Total** | **28** | **✅ All Pass** |
 
@@ -95,7 +96,7 @@ post-for-me/
 - **Validation**: Zod 3.25.x
 - **Cloud Storage**: Google Cloud Storage SDK 7.18.0
 - **Video Processing**: fluent-ffmpeg 2.1.3 (requires ffmpeg binary)
-- **API Integration**: Buffer API (via fetch)
+- **API Integration**: Instagram Graph API (via fetch)
 - **Testing**: Bun's built-in test runner
 - **Deployment**: Docker + Digital Ocean App Platform
 
@@ -116,7 +117,7 @@ post-for-me/
 ```json
 {
   "success": true,
-  "postId": "buffer-post-id",
+  "postId": "instagram-media-id",
   "videoUsed": "gs://bucket/video-name.mp4"
 }
 ```
@@ -179,7 +180,7 @@ Comprehensive documentation provided:
 1. ✅ **Phase 1**: Project setup, HTTP server, validation
 2. ✅ **Phase 2**: Google Cloud Storage integration
 3. ✅ **Phase 3**: Video editing with ffmpeg
-4. ✅ **Phase 4**: Buffer API integration
+4. ✅ **Phase 4**: Instagram Graph API integration
 5. ✅ **Phase 5**: End-to-end integration
 6. ✅ **Phase 6**: Deployment configuration
 
@@ -191,7 +192,7 @@ Comprehensive documentation provided:
 - **Test Cases**: 28
 - **Documentation Files**: 4
 - **Scripts**: 3
-- **Services**: 3 (Video Selector, Video Editor, Buffer Client)
+- **Services**: 3 (Video Selector, Video Editor, Instagram Client)
 
 ## 🎓 Design Decisions
 
@@ -201,11 +202,11 @@ Comprehensive documentation provided:
 - Built-in test runner
 - Modern JavaScript runtime
 
-### Why Buffer API (vs Direct IG)?
-- Faster to implement
-- No Facebook App setup required
-- Good for MVP/testing
-- Easy migration path to Instagram Graph API later
+### Why Instagram Graph API?
+- Direct integration with Instagram
+- Full control over posting flow
+- Access to Instagram Insights API
+- Official, supported solution from Meta
 
 ### Why ffmpeg?
 - Industry standard for video processing
@@ -217,14 +218,14 @@ Comprehensive documentation provided:
 - Services are independent and testable
 - Easy to swap implementations
 - Clear separation of concerns
-- Future-proof for IG Graph API migration
+- Extensible for future enhancements
 
 ## 🔮 Future Enhancements
 
 The codebase is structured to easily add:
 
-- [ ] Direct Instagram Graph API integration
-- [ ] Analytics and engagement tracking
+- [ ] Instagram Insights API for analytics
+- [ ] Engagement tracking
 - [ ] Scheduled posting (date/time selection)
 - [ ] Multiple text overlays
 - [ ] Custom fonts and styling options

@@ -1,6 +1,7 @@
 import { getConfig } from './config/index.js';
 import { logger } from './utils/logger.js';
 import { handlePostReel } from './routes/post-reel.js';
+import { handleTestInstagram } from './routes/test-instagram.js';
 
 const config = getConfig();
 
@@ -17,6 +18,11 @@ const server = Bun.serve({
     // Post reel endpoint
     if (url.pathname === '/api/post-reel' && request.method === 'POST') {
       return handlePostReel(request);
+    }
+
+    // Test Instagram credentials endpoint
+    if (url.pathname === '/api/test-instagram' && request.method === 'GET') {
+      return handleTestInstagram();
     }
 
     // 404 for unknown routes
