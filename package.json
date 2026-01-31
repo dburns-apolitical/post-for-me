@@ -1,0 +1,39 @@
+{
+  "name": "post-for-me",
+  "version": "1.0.0",
+  "description": "Automated Instagram Reels posting service",
+  "type": "module",
+  "scripts": {
+    "dev": "bun run --watch src/index.ts",
+    "start": "bun run src/index.ts",
+    "test": "bun test",
+    "test:watch": "bun test --watch",
+    "test:unit": "bun test tests/unit",
+    "test:integration": "bun test tests/integration",
+    "docker:build": "docker build -t post-for-me .",
+    "docker:run": "docker run -p 3000:3000 --env-file .env post-for-me",
+    "docker:test": "./scripts/test-docker.sh"
+  },
+  "dependencies": {
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
+    "fluent-ffmpeg": "^2.1.3",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/fluent-ffmpeg": "^2.1.26"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
+  },
+  "keywords": [
+    "instagram",
+    "reels",
+    "automation",
+    "buffer",
+    "video",
+    "social-media"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}

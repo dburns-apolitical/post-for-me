@@ -1,0 +1,40 @@
+# Docker build test
+*.dockerignore
+
+# Development
+node_modules
+.env
+.env.local
+*.log
+
+# Tests
+tests
+*.test.ts
+*.test.js
+
+# Documentation
+*.md
+!README.md
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp files
+tmp/*
+temp/*
+
+# Credentials (should never be in repo anyway)
+*.json
+!package.json
+!tsconfig.json

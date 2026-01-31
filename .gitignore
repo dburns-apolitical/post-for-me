@@ -1,0 +1,28 @@
+# Bun
+node_modules
+*.log
+dist
+build
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Temp files
+tmp/
+temp/
+*.tmp
+
+# Videos
+videos/
+*.mp4
+*.mov
+*.avi

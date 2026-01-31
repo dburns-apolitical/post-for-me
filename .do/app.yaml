@@ -1,0 +1,36 @@
+name: post-for-me
+region: nyc
+services:
+  - name: web
+    dockerfile_path: Dockerfile
+    source_dir: .
+    github:
+      branch: main
+      deploy_on_push: true
+      repo: YOUR_USERNAME/post-for-me
+    health_check:
+      http_path: /health
+    http_port: 3000
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    routes:
+      - path: /
+    envs:
+      - key: PORT
+        value: "3000"
+      - key: NODE_ENV
+        value: "production"
+      - key: GCS_PROJECT_ID
+        scope: RUN_TIME
+        type: SECRET
+      - key: GCS_BUCKET_NAME
+        scope: RUN_TIME
+        type: SECRET
+      - key: BUFFER_ACCESS_TOKEN
+        scope: RUN_TIME
+        type: SECRET
+      - key: BUFFER_PROFILE_ID
+        scope: RUN_TIME
+        type: SECRET
+      - key: TEMP_DIR
+        value: "/app/tmp"
