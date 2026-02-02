@@ -210,8 +210,10 @@ export class VideoEditorService {
                 .videoFilters(filterStrings)
                 .outputOptions([
                     '-codec:a', 'copy', // Copy audio without re-encoding
-                    '-preset', 'fast', // Faster encoding
+                    '-preset', 'ultrafast', // Less memory usage than 'fast'
                     '-crf', '23', // Constant Rate Factor for quality
+                    '-threads', '1', // Single thread to reduce memory usage
+                    '-max_muxing_queue_size', '1024', // Limit muxing buffer
                 ])
                 .output(outputPath)
                 .on('start', (commandLine) => {
