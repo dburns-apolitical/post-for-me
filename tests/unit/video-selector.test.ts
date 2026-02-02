@@ -35,18 +35,18 @@ describe('VideoSelectorService', () => {
     test('should skip cleanup in development mode', () => {
       const service = new VideoSelectorService();
       const testFile = './tmp/test-cleanup-dev.txt';
-      
+
       // Create a test file
       if (!fs.existsSync('./tmp')) {
         fs.mkdirSync('./tmp', { recursive: true });
       }
       fs.writeFileSync(testFile, 'test content');
-      
+
       // Cleanup should be skipped in development mode (file remains)
       service.cleanupTempFile(testFile);
-      
+
       expect(fs.existsSync(testFile)).toBe(true);
-      
+
       // Manual cleanup for test
       fs.unlinkSync(testFile);
     });
@@ -55,36 +55,39 @@ describe('VideoSelectorService', () => {
       const originalNodeEnv = process.env.NODE_ENV;
       const originalInstagramToken = process.env.INSTAGRAM_ACCESS_TOKEN;
       const originalInstagramUserId = process.env.INSTAGRAM_USER_ID;
-      
+      const originalDatabaseUrl = process.env.DATABASE_URL;
+
       process.env.NODE_ENV = 'production';
       process.env.INSTAGRAM_ACCESS_TOKEN = 'test-token';
       process.env.INSTAGRAM_USER_ID = 'test-user-id';
-      
+      process.env.DATABASE_URL = 'postgresql://test:test@localhost/test';
+
       try {
         const service = new VideoSelectorService();
         const testFile = './tmp/test-cleanup-prod.txt';
-        
+
         // Create a test file
         if (!fs.existsSync('./tmp')) {
           fs.mkdirSync('./tmp', { recursive: true });
         }
         fs.writeFileSync(testFile, 'test content');
-        
+
         // Cleanup should delete the file in production mode
         service.cleanupTempFile(testFile);
-        
+
         expect(fs.existsSync(testFile)).toBe(false);
       } finally {
         // Restore original env vars
         process.env.NODE_ENV = originalNodeEnv;
         process.env.INSTAGRAM_ACCESS_TOKEN = originalInstagramToken;
         process.env.INSTAGRAM_USER_ID = originalInstagramUserId;
+        process.env.DATABASE_URL = originalDatabaseUrl;
       }
     });
 
     test('should not throw error if file does not exist', () => {
       const service = new VideoSelectorService();
-      
+
       // Should not throw
       expect(() => {
         service.cleanupTempFile('./tmp/nonexistent-file.txt');

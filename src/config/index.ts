@@ -6,6 +6,7 @@ export function getConfig(): Config {
         'GCS_BUCKET_NAME',
         'INSTAGRAM_ACCESS_TOKEN',
         'INSTAGRAM_USER_ID',
+        'DATABASE_URL',
     ];
 
     const missing = requiredEnvVars.filter((varName) => !process.env[varName]);
@@ -27,6 +28,6 @@ export function getConfig(): Config {
             userId: process.env.INSTAGRAM_USER_ID || '',
         },
         tempDir: process.env.TEMP_DIR || './tmp',
-        historyFilePath: process.env.HISTORY_FILE_PATH || './data/history.json',
+        databaseUrl: process.env.DATABASE_URL || '',
     };
 }

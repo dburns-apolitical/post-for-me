@@ -37,5 +37,55 @@ export interface Config {
         userId: string;
     };
     tempDir: string;
-    historyFilePath: string;
+    databaseUrl: string;
+}
+
+// Database types
+export type PostStatus = 'pending' | 'success' | 'failed';
+
+export interface DbCaption {
+    id: number;
+    text: string;
+    created_at: Date;
+}
+
+export interface DbHashtag {
+    id: number;
+    text: string;
+    created_at: Date;
+}
+
+export interface DbHook {
+    id: number;
+    text: string;
+    created_at: Date;
+}
+
+export interface DbHashtagCombination {
+    id: number;
+    hashtag1_id: number;
+    hashtag2_id: number | null;
+    hashtag3_id: number | null;
+    hashtag4_id: number | null;
+    hashtag5_id: number | null;
+    created_at: Date;
+}
+
+export interface DbVideo {
+    id: number;
+    title: string;
+    created_at: Date;
+}
+
+export interface DbPost {
+    id: number;
+    video_id: number;
+    hook_id: number;
+    caption_id: number;
+    hashtag_combination_id: number;
+    instagram_post_id: string | null;
+    views: number | null;
+    status: PostStatus;
+    created_at: Date;
+    updated_at: Date;
 }

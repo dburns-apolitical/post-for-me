@@ -2,20 +2,20 @@ import { describe, test, expect } from 'bun:test';
 import { InstagramClientService } from '../../src/services/instagram-client';
 
 describe('InstagramClientService', () => {
-  // Note: These tests require actual Instagram API credentials
-  // In a real environment, we would mock the fetch calls
-  
-  test('should instantiate without errors', () => {
-    expect(() => {
-      const service = new InstagramClientService();
-    }).not.toThrow();
-  });
+    // Note: These tests require actual Instagram API credentials
+    // In a real environment, we would mock the fetch calls
 
-  describe('postReel', () => {
-    test('should handle API calls', async () => {
-      // This would be tested with mocked fetch in a real test suite
-      // For now, we'll test this in integration tests
-      expect(true).toBe(true);
+    test('should instantiate without errors', () => {
+        expect(() => {
+            const service = new InstagramClientService();
+        }).not.toThrow();
     });
-  });
+
+    describe('postReel', () => {
+        test('should handle API calls', async () => {
+            // This would be tested with mocked fetch in a real test suite
+            // For now, we'll test this in integration tests
+            expect(true).toBe(true);
+        });
+    });
 });
