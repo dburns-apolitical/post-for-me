@@ -40,7 +40,7 @@ export class InstagramClientService {
                 );
             }
 
-            const data = await response.json();
+            const data = (await response.json()) as { id?: string };
 
             if (!data.id) {
                 throw new Error('No container ID returned from Instagram');
@@ -82,7 +82,7 @@ export class InstagramClientService {
                 );
             }
 
-            const data = await response.json();
+            const data = (await response.json()) as { status_code?: string; status?: string };
 
             return {
                 status: data.status_code || 'UNKNOWN',
@@ -161,7 +161,7 @@ export class InstagramClientService {
                 );
             }
 
-            const data = await response.json();
+            const data = (await response.json()) as { id?: string };
 
             if (!data.id) {
                 throw new Error('No media ID returned from Instagram');
@@ -207,7 +207,12 @@ export class InstagramClientService {
                 );
             }
 
-            const data = await response.json();
+            const data = (await response.json()) as {
+                id: string;
+                username: string;
+                account_type: string;
+                media_count: number;
+            };
 
             logger.info('Retrieved Instagram account info', {
                 username: data.username,
