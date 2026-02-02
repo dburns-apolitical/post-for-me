@@ -2,6 +2,7 @@ import { getConfig } from './config/index.js';
 import { logger } from './utils/logger.js';
 import { handlePostReel } from './routes/post-reel.js';
 import { handleTestInstagram } from './routes/test-instagram.js';
+import { handleStats } from './routes/stats.js';
 import { DatabaseService } from './services/database.js';
 import { ViewsSyncCronService } from './services/views-sync-cron.js';
 import * as fs from 'fs';
@@ -144,6 +145,11 @@ startup().then(() => {
       // Test Instagram credentials endpoint
       if (url.pathname === '/api/test-instagram' && request.method === 'GET') {
         return handleTestInstagram();
+      }
+
+      // Dashboard stats endpoint (requires authentication)
+      if (url.pathname === '/api/stats' && request.method === 'GET') {
+        return handleStats(request);
       }
 
       // 404 for unknown routes

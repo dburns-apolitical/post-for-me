@@ -29,5 +29,9 @@ export function getConfig(): Config {
         },
         tempDir: process.env.TEMP_DIR || './tmp',
         databaseUrl: process.env.DATABASE_URL || '',
+        dashboard: {
+            password: process.env.DASHBOARD_PASSWORD || '',
+            neonAuthUrl: process.env.NEON_AUTH_URL,
+        },
     };
 }
