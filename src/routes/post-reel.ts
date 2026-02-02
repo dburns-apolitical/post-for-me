@@ -1,5 +1,6 @@
 import { logger } from '../utils/logger.js';
 import { validatePostReelRequest } from '../utils/validation.js';
+import { validateAuth, unauthorizedResponse } from '../utils/auth.js';
 import type { PostReelResponse } from '../types/index.js';
 import { VideoSelectorService } from '../services/video-selector.js';
 import { VideoEditorService } from '../services/video-editor.js';
@@ -7,6 +8,13 @@ import { InstagramClientService } from '../services/instagram-client.js';
 import { DatabaseService } from '../services/database.js';
 
 export async function handlePostReel(request: Request): Promise<Response> {
+    // Validate authentication
+    const authResult = await validateAuth(request);
+    if (!authResult.authenticated) {
+        logger.warn('Unauthorized post-reel request', { error: authResult.error });
+        return unauthorizedResponse(authResult.error || 'Unauthorized');
+    }
+
     let inputVideoPath: string | null = null;
     let editedVideoPath: string | null = null;
     let postId: number | null = null;

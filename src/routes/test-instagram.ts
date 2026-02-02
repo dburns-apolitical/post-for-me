@@ -1,7 +1,15 @@
 import { logger } from '../utils/logger.js';
+import { validateAuth, unauthorizedResponse } from '../utils/auth.js';
 import { InstagramClientService } from '../services/instagram-client.js';
 
-export async function handleTestInstagram(): Promise<Response> {
+export async function handleTestInstagram(request: Request): Promise<Response> {
+    // Validate authentication
+    const authResult = await validateAuth(request);
+    if (!authResult.authenticated) {
+        logger.warn('Unauthorized test-instagram request', { error: authResult.error });
+        return unauthorizedResponse(authResult.error || 'Unauthorized');
+    }
+
     try {
         const instagramClient = new InstagramClientService();
         const accountInfo = await instagramClient.getAccountInfo();

@@ -1,0 +1,46 @@
+---
+description: API endpoint authentication requirements
+globs: src/routes/**/*.ts, src/index.ts
+---
+
+# API Authentication Rules
+
+## Default: All Endpoints Protected
+
+All new API endpoints MUST include authentication by default. Use the `validateAuth` utility from `src/utils/auth.ts`.
+
+## Authentication Pattern
+
+Every route handler (except `/health`) must start with:
+
+```typescript
+import { validateAuth, unauthorizedResponse } from '../utils/auth.js';
+
+export async function handleYourEndpoint(request: Request): Promise<Response> {
+    // Validate authentication
+    const authResult = await validateAuth(request);
+    if (!authResult.authenticated) {
+        logger.warn('Unauthorized request', { error: authResult.error });
+        return unauthorizedResponse(authResult.error || 'Unauthorized');
+    }
+
+    // ... rest of handler
+}
+```
+
+## Exceptions
+
+Only the following endpoint should remain unprotected:
+- `GET /health` - Health check for load balancers and monitoring
+
+## Supported Auth Methods
+
+The `validateAuth` function accepts:
+1. **Password auth**: `X-Dashboard-Password` header
+2. **Bearer token**: `Authorization: Bearer <token>` header (Neon Auth JWT)
+
+## When Adding New Routes
+
+1. Create handler in `src/routes/`
+2. Add auth check as first operation
+3. Register in `src/index.ts` passing the `request` object

@@ -144,7 +144,7 @@ startup().then(() => {
 
       // Test Instagram credentials endpoint
       if (url.pathname === '/api/test-instagram' && request.method === 'GET') {
-        return handleTestInstagram();
+        return handleTestInstagram(request);
       }
 
       // Dashboard stats endpoint (requires authentication)
