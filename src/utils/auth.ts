@@ -1,3 +1,4 @@
+import { jwtVerify, createRemoteJWKSet } from 'jose';
 import { getConfig } from '../config/index.js';
 import { logger } from './logger.js';
 
@@ -5,6 +6,16 @@ export interface AuthResult {
     authenticated: boolean;
     method?: 'password' | 'bearer';
     error?: string;
+}
+
+// Cache the JWKS to avoid fetching on every request
+let jwksCache: ReturnType<typeof createRemoteJWKSet> | null = null;
+
+function getJWKS(jwksUrl: string) {
+    if (!jwksCache) {
+        jwksCache = createRemoteJWKSet(new URL(jwksUrl));
+    }
+    return jwksCache;
 }
 
 /**
@@ -54,8 +65,8 @@ export async function validateAuth(request: Request): Promise<AuthResult> {
         }
 
         // Validate JWT token
-        const isValid = await validateBearerToken(token);
-        if (isValid) {
+        const result = await validateBearerToken(token);
+        if (result.valid) {
             return {
                 authenticated: true,
                 method: 'bearer',
@@ -64,7 +75,7 @@ export async function validateAuth(request: Request): Promise<AuthResult> {
 
         return {
             authenticated: false,
-            error: 'Invalid or expired token',
+            error: result.error || 'Invalid or expired token',
         };
     }
 
@@ -74,62 +85,116 @@ export async function validateAuth(request: Request): Promise<AuthResult> {
     };
 }
 
+interface TokenValidationResult {
+    valid: boolean;
+    error?: string;
+}
+
 /**
- * Validate a Bearer token (JWT)
+ * Validate a Bearer token (JWT) using Neon Auth JWKS
  * 
- * If NEON_AUTH_URL is configured, validates against Neon Auth.
- * Otherwise, attempts basic JWT validation.
+ * Cryptographically verifies the JWT signature using Neon's public keys.
  */
-async function validateBearerToken(token: string): Promise<boolean> {
+async function validateBearerToken(token: string): Promise<TokenValidationResult> {
     const config = getConfig();
 
-    // If Neon Auth URL is configured, validate against it
-    if (config.dashboard.neonAuthUrl) {
+    logger.debug('Validating bearer token', {
+        tokenLength: token.length,
+        tokenPreview: token.substring(0, 20) + '...',
+    });
+
+    // Get JWKS URL - use configured URL or derive from Neon Auth URL
+    let jwksUrl = config.dashboard.neonJwksUrl;
+
+    if (!jwksUrl && config.dashboard.neonAuthUrl) {
+        // Derive JWKS URL from Neon Auth URL
+        // e.g., https://ep-xxx.neonauth.eu-west-2.aws.neon.tech/neondb/auth 
+        // -> https://ep-xxx.neonauth.eu-west-2.aws.neon.tech/.well-known/jwks.json
         try {
-            const response = await fetch(`${config.dashboard.neonAuthUrl}/api/auth/session`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                },
-            });
-
-            if (response.ok) {
-                const session = await response.json() as { user?: { id?: string } } | null;
-                // Check if session has a valid user
-                return !!session?.user?.id;
-            }
-
-            return false;
-        } catch (error) {
-            logger.error('Failed to validate token with Neon Auth', {
-                error: error instanceof Error ? error.message : 'Unknown error',
-            });
-            return false;
+            const authUrl = new URL(config.dashboard.neonAuthUrl);
+            jwksUrl = `${authUrl.origin}/.well-known/jwks.json`;
+        } catch {
+            logger.error('Invalid NEON_AUTH_URL format');
+            return { valid: false, error: 'Invalid auth configuration' };
         }
     }
 
-    // Basic JWT structure validation (without cryptographic verification)
-    // This is a fallback when Neon Auth URL is not configured
+    if (!jwksUrl) {
+        // Fallback to basic validation if no JWKS URL configured
+        logger.warn('No JWKS URL configured, falling back to basic JWT validation');
+        return validateTokenBasic(token);
+    }
+
+    try {
+        logger.debug('Verifying JWT with JWKS', { jwksUrl });
+
+        const jwks = getJWKS(jwksUrl);
+        const { payload } = await jwtVerify(token, jwks);
+
+        logger.debug('JWT verified successfully', {
+            sub: payload.sub,
+            exp: payload.exp,
+            iat: payload.iat,
+        });
+
+        return { valid: true };
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+        // Provide more specific error messages
+        if (errorMessage.includes('expired')) {
+            logger.warn('JWT has expired', { error: errorMessage });
+            return { valid: false, error: 'Token has expired' };
+        }
+
+        if (errorMessage.includes('signature')) {
+            logger.warn('JWT signature verification failed', { error: errorMessage });
+            return { valid: false, error: 'Invalid token signature' };
+        }
+
+        logger.error('JWT verification failed', { error: errorMessage });
+        return { valid: false, error: 'Token verification failed' };
+    }
+}
+
+/**
+ * Basic JWT validation without cryptographic verification
+ * Used as fallback when JWKS is not configured
+ */
+function validateTokenBasic(token: string): TokenValidationResult {
     try {
         const parts = token.split('.');
         if (parts.length !== 3) {
-            return false;
+            logger.debug('Token is not a valid JWT structure', { partsCount: parts.length });
+            return { valid: false, error: 'Invalid token format' };
         }
 
         // Decode payload and check expiration
         const payload = JSON.parse(atob(parts[1]));
 
+        logger.debug('JWT payload decoded (basic validation)', {
+            hasExp: !!payload.exp,
+            exp: payload.exp,
+            currentTime: Math.floor(Date.now() / 1000),
+        });
+
         // Check if token has expired
         if (payload.exp && payload.exp < Date.now() / 1000) {
-            logger.debug('Token has expired');
-            return false;
+            logger.warn('Token has expired', {
+                exp: payload.exp,
+                expDate: new Date(payload.exp * 1000).toISOString(),
+                currentTime: new Date().toISOString(),
+            });
+            return { valid: false, error: 'Token has expired' };
         }
 
-        // Token structure is valid (but not cryptographically verified)
-        // For production use, configure NEON_AUTH_URL for proper validation
-        logger.warn('JWT validated without cryptographic verification. Configure NEON_AUTH_URL for secure validation.');
-        return true;
-    } catch {
-        return false;
+        logger.warn('JWT validated without cryptographic verification. Configure NEON_JWKS_URL for secure validation.');
+        return { valid: true };
+    } catch (error) {
+        logger.debug('Failed to decode JWT', {
+            error: error instanceof Error ? error.message : 'Unknown error',
+        });
+        return { valid: false, error: 'Invalid token format' };
     }
 }
 

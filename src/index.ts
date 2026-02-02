@@ -125,6 +125,37 @@ async function shutdown(signal: string): Promise<void> {
 process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 
+// CORS configuration
+const ALLOWED_ORIGINS = ['http://localhost:5173'];
+
+function getCorsHeaders(request: Request): Record<string, string> {
+  const origin = request.headers.get('Origin');
+  const headers: Record<string, string> = {
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Dashboard-Password',
+    'Access-Control-Max-Age': '86400',
+  };
+
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    headers['Access-Control-Allow-Origin'] = origin;
+  }
+
+  return headers;
+}
+
+function withCors(response: Response, request: Request): Response {
+  const corsHeaders = getCorsHeaders(request);
+  const newHeaders = new Headers(response.headers);
+  for (const [key, value] of Object.entries(corsHeaders)) {
+    newHeaders.set(key, value);
+  }
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: newHeaders,
+  });
+}
+
 // Run startup and then start server
 startup().then(() => {
   const server = Bun.serve({
@@ -132,31 +163,39 @@ startup().then(() => {
     async fetch(request) {
       const url = new URL(request.url);
 
+      // Handle CORS preflight requests
+      if (request.method === 'OPTIONS') {
+        return new Response(null, {
+          status: 204,
+          headers: getCorsHeaders(request),
+        });
+      }
+
       // Health check endpoint
       if (url.pathname === '/health' && request.method === 'GET') {
-        return Response.json({ status: 'ok', timestamp: new Date().toISOString() });
+        return withCors(Response.json({ status: 'ok', timestamp: new Date().toISOString() }), request);
       }
 
       // Post reel endpoint
       if (url.pathname === '/api/post-reel' && request.method === 'POST') {
-        return handlePostReel(request);
+        return withCors(await handlePostReel(request), request);
       }
 
       // Test Instagram credentials endpoint
       if (url.pathname === '/api/test-instagram' && request.method === 'GET') {
-        return handleTestInstagram(request);
+        return withCors(await handleTestInstagram(request), request);
       }
 
       // Dashboard stats endpoint (requires authentication)
       if (url.pathname === '/api/stats' && request.method === 'GET') {
-        return handleStats(request);
+        return withCors(await handleStats(request), request);
       }
 
       // 404 for unknown routes
-      return Response.json(
+      return withCors(Response.json(
         { error: 'Not found' },
         { status: 404 }
-      );
+      ), request);
     },
   });
 

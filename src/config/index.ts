@@ -32,6 +32,7 @@ export function getConfig(): Config {
         dashboard: {
             password: process.env.DASHBOARD_PASSWORD || '',
             neonAuthUrl: process.env.NEON_AUTH_URL,
+            neonJwksUrl: process.env.NEON_JWKS_URL,
         },
     };
 }

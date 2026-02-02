@@ -41,6 +41,7 @@ export interface Config {
     dashboard: {
         password: string;
         neonAuthUrl?: string;
+        neonJwksUrl?: string;
     };
 }
 
