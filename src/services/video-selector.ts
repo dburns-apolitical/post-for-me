@@ -135,7 +135,8 @@ export class VideoSelectorService {
     }
 
     /**
-     * Download a video from public URL to local temp storage
+     * Download a video from public URL to local temp storage using streaming
+     * to avoid loading the entire file into memory
      */
     async downloadVideo(videoFile: VideoFile): Promise<string> {
         try {
@@ -151,16 +152,36 @@ export class VideoSelectorService {
                 throw new Error(`Failed to download: ${response.status} ${response.statusText}`);
             }
 
-            const arrayBuffer = await response.arrayBuffer();
-            const buffer = Buffer.from(arrayBuffer);
+            if (!response.body) {
+                throw new Error('Response body is null');
+            }
 
-            // Write to file
-            fs.writeFileSync(localPath, buffer);
+            // Stream directly to file to avoid loading entire video into memory
+            const fileStream = fs.createWriteStream(localPath);
+            const reader = response.body.getReader();
+            let totalBytes = 0;
 
-            logger.info('Video downloaded successfully', {
+            try {
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    fileStream.write(value);
+                    totalBytes += value.length;
+                }
+            } finally {
+                fileStream.end();
+            }
+
+            // Wait for the file to finish writing
+            await new Promise<void>((resolve, reject) => {
+                fileStream.on('finish', resolve);
+                fileStream.on('error', reject);
+            });
+
+            logger.info('Video downloaded successfully (streamed)', {
                 video: videoFile.name,
                 localPath,
-                size: buffer.length,
+                size: totalBytes,
             });
 
             return localPath;
@@ -217,6 +238,7 @@ export class VideoSelectorService {
 
     /**
      * Upload an edited video to GCS (in edited/ folder) and return the public URL
+     * Uses streaming to avoid loading the entire file into memory
      * Videos in edited/ folder won't be picked up by listVideos()
      */
     async uploadEditedVideo(localPath: string): Promise<string> {
@@ -225,15 +247,37 @@ export class VideoSelectorService {
             const gcsPath = `edited/${fileName}`;
             const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${this.bucketName}/o?uploadType=media&name=${encodeURIComponent(gcsPath)}`;
 
-            // Read the file
-            const fileBuffer = fs.readFileSync(localPath);
+            // Get file size for logging and Content-Length header
+            const stats = fs.statSync(localPath);
+            const fileSize = stats.size;
+
+            // Create a readable stream from the file
+            const fileStream = fs.createReadStream(localPath);
+
+            // Convert Node.js stream to web ReadableStream for fetch
+            const webStream = new ReadableStream({
+                start(controller) {
+                    fileStream.on('data', (chunk: Buffer) => {
+                        controller.enqueue(chunk);
+                    });
+                    fileStream.on('end', () => {
+                        controller.close();
+                    });
+                    fileStream.on('error', (err) => {
+                        controller.error(err);
+                    });
+                },
+            });
 
             const response = await fetch(uploadUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'video/mp4',
+                    'Content-Length': fileSize.toString(),
                 },
-                body: fileBuffer,
+                body: webStream,
+                // @ts-ignore - Bun supports duplex for streaming uploads
+                duplex: 'half',
             });
 
             if (!response.ok) {
@@ -243,11 +287,11 @@ export class VideoSelectorService {
 
             const publicUrl = `https://storage.googleapis.com/${this.bucketName}/${gcsPath}`;
 
-            logger.info('Edited video uploaded to GCS', {
+            logger.info('Edited video uploaded to GCS (streamed)', {
                 localPath,
                 gcsPath,
                 publicUrl,
-                size: fileBuffer.length,
+                size: fileSize,
             });
 
             return publicUrl;
