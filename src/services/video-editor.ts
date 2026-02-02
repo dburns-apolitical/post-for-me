@@ -1,12 +1,14 @@
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
+import ffprobeInstaller from '@ffprobe-installer/ffprobe';
 import { logger } from '../utils/logger.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import { getConfig } from '../config/index.js';
 
-// Use the bundled ffmpeg binary which has all filters including drawtext
+// Use the bundled ffmpeg and ffprobe binaries
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
+ffmpeg.setFfprobePath(ffprobeInstaller.path);
 
 export interface TextOverlayOptions {
     text: string;
