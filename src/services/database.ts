@@ -329,4 +329,32 @@ export class DatabaseService {
         const result = await this.sql`SELECT COUNT(*) as count FROM hashtags` as { count: string }[];
         return parseInt(result[0].count, 10);
     }
+
+    /**
+     * Get successful posts that are at least 5 days old and have no views recorded
+     */
+    async getPostsNeedingViewsUpdate(): Promise<DbPost[]> {
+        const result = await this.sql`
+            SELECT id, video_id, hook_id, caption_id, hashtag_combination_id, 
+                   instagram_post_id, views, status, created_at, updated_at
+            FROM posts
+            WHERE status = 'success'
+              AND views IS NULL
+              AND instagram_post_id IS NOT NULL
+              AND created_at <= NOW() - INTERVAL '5 days'
+        ` as DbPost[];
+        return result;
+    }
+
+    /**
+     * Update the views count for a specific post
+     */
+    async updatePostViews(postId: number, views: number): Promise<void> {
+        await this.sql`
+            UPDATE posts
+            SET views = ${views}, updated_at = NOW()
+            WHERE id = ${postId}
+        `;
+        logger.debug('Post views updated', { postId, views });
+    }
 }

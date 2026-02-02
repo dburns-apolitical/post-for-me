@@ -3,11 +3,13 @@ import { logger } from './utils/logger.js';
 import { handlePostReel } from './routes/post-reel.js';
 import { handleTestInstagram } from './routes/test-instagram.js';
 import { DatabaseService } from './services/database.js';
+import { ViewsSyncCronService } from './services/views-sync-cron.js';
 import * as fs from 'fs';
 import * as path from 'path';
 
 const config = getConfig();
 const db = new DatabaseService();
+const viewsSyncCron = new ViewsSyncCronService();
 
 /**
  * Clear all files in the tmp directory
@@ -84,6 +86,9 @@ async function startup(): Promise<void> {
     // Don't throw - continue starting the server
   }
 
+  // Start the views sync cron job
+  viewsSyncCron.start();
+
   logger.info('Server initialization complete');
 }
 
@@ -92,6 +97,9 @@ async function startup(): Promise<void> {
  */
 async function shutdown(signal: string): Promise<void> {
   logger.info(`Received ${signal}, starting graceful shutdown...`);
+
+  // Stop the views sync cron job
+  viewsSyncCron.stop();
 
   // Mark any in-progress posts as failed
   try {

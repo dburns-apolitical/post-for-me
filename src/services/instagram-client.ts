@@ -263,4 +263,61 @@ export class InstagramClientService {
             containerId,
         };
     }
+
+    /**
+     * Get media insights (views) for a specific media post
+     */
+    async getMediaInsights(mediaId: string): Promise<number> {
+        try {
+            const params = new URLSearchParams({
+                metric: 'ig_reels_aggregated_all_plays_count',
+                access_token: this.accessToken,
+            });
+
+            const response = await fetch(
+                `${this.baseUrl}/${mediaId}/insights?${params}`
+            );
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(
+                    `Failed to get media insights: ${response.status} ${JSON.stringify(errorData)}`
+                );
+            }
+
+            const data = (await response.json()) as {
+                data?: Array<{
+                    name: string;
+                    values: Array<{ value: number }>;
+                }>;
+            };
+
+            if (!data.data || data.data.length === 0) {
+                throw new Error('No insights data returned from Instagram');
+            }
+
+            const viewsMetric = data.data.find(
+                (metric) => metric.name === 'ig_reels_aggregated_all_plays_count'
+            );
+
+            if (!viewsMetric || !viewsMetric.values || viewsMetric.values.length === 0) {
+                throw new Error('Views metric not found in insights data');
+            }
+
+            const views = viewsMetric.values[0].value;
+
+            logger.debug('Retrieved media insights', {
+                mediaId,
+                views,
+            });
+
+            return views;
+        } catch (error) {
+            logger.error('Error getting media insights', {
+                error: error instanceof Error ? error.message : 'Unknown error',
+                mediaId,
+            });
+            throw error;
+        }
+    }
 }
