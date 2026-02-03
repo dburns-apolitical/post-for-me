@@ -1,7 +1,7 @@
 import { neon } from '@neondatabase/serverless';
 import { getConfig } from '../config/index.js';
 import { logger } from '../utils/logger.js';
-import { validateAuth, unauthorizedResponse } from '../utils/auth.js';
+import { validateAuth, unauthorizedResponse, forbiddenResponse } from '../utils/auth.js';
 import type {
     DashboardStats,
     PostWithDetails,
@@ -16,6 +16,10 @@ export async function handleStats(request: Request): Promise<Response> {
     if (!authResult.authenticated) {
         logger.warn('Unauthorized stats request', { error: authResult.error });
         return unauthorizedResponse(authResult.error || 'Unauthorized');
+    }
+    if (!authResult.isAdmin) {
+        logger.warn('Non-admin stats request', { userId: authResult.userId });
+        return forbiddenResponse('Admin access required');
     }
 
     logger.info('Stats request authenticated', { method: authResult.method });

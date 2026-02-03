@@ -1,5 +1,5 @@
 import { logger } from '../utils/logger.js';
-import { validateAuth, unauthorizedResponse } from '../utils/auth.js';
+import { validateAuth, unauthorizedResponse, forbiddenResponse } from '../utils/auth.js';
 import { InstagramClientService } from '../services/instagram-client.js';
 
 export async function handleTestInstagram(request: Request): Promise<Response> {
@@ -8,6 +8,10 @@ export async function handleTestInstagram(request: Request): Promise<Response> {
     if (!authResult.authenticated) {
         logger.warn('Unauthorized test-instagram request', { error: authResult.error });
         return unauthorizedResponse(authResult.error || 'Unauthorized');
+    }
+    if (!authResult.isAdmin) {
+        logger.warn('Non-admin test-instagram request', { userId: authResult.userId });
+        return forbiddenResponse('Admin access required');
     }
 
     try {

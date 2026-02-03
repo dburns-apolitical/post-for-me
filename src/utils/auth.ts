@@ -1,10 +1,13 @@
 import { jwtVerify, createRemoteJWKSet } from 'jose';
+import { neon } from '@neondatabase/serverless';
 import { getConfig } from '../config/index.js';
 import { logger } from './logger.js';
 
 export interface AuthResult {
     authenticated: boolean;
+    isAdmin: boolean;
     method?: 'password' | 'bearer';
+    userId?: string;
     error?: string;
 }
 
@@ -35,19 +38,23 @@ export async function validateAuth(request: Request): Promise<AuthResult> {
             logger.warn('Dashboard password not configured');
             return {
                 authenticated: false,
+                isAdmin: false,
                 error: 'Dashboard authentication not configured',
             };
         }
 
         if (passwordHeader === config.dashboard.password) {
+            // Password auth implies admin access (server-side secret)
             return {
                 authenticated: true,
+                isAdmin: true,
                 method: 'password',
             };
         }
 
         return {
             authenticated: false,
+            isAdmin: false,
             error: 'Invalid password',
         };
     }
@@ -60,33 +67,41 @@ export async function validateAuth(request: Request): Promise<AuthResult> {
         if (!token) {
             return {
                 authenticated: false,
+                isAdmin: false,
                 error: 'Missing token',
             };
         }
 
         // Validate JWT token
         const result = await validateBearerToken(token);
-        if (result.valid) {
+        if (result.valid && result.userId) {
+            // Check if user has admin role in neon_auth.users
+            const isAdmin = await checkUserIsAdmin(result.userId);
             return {
                 authenticated: true,
+                isAdmin,
                 method: 'bearer',
+                userId: result.userId,
             };
         }
 
         return {
             authenticated: false,
+            isAdmin: false,
             error: result.error || 'Invalid or expired token',
         };
     }
 
     return {
         authenticated: false,
+        isAdmin: false,
         error: 'No authentication provided. Use X-Dashboard-Password header or Authorization: Bearer <token>',
     };
 }
 
 interface TokenValidationResult {
     valid: boolean;
+    userId?: string;
     error?: string;
 }
 
@@ -137,7 +152,7 @@ async function validateBearerToken(token: string): Promise<TokenValidationResult
             iat: payload.iat,
         });
 
-        return { valid: true };
+        return { valid: true, userId: payload.sub };
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
@@ -189,12 +204,41 @@ function validateTokenBasic(token: string): TokenValidationResult {
         }
 
         logger.warn('JWT validated without cryptographic verification. Configure NEON_JWKS_URL for secure validation.');
-        return { valid: true };
+        return { valid: true, userId: payload.sub };
     } catch (error) {
         logger.debug('Failed to decode JWT', {
             error: error instanceof Error ? error.message : 'Unknown error',
         });
         return { valid: false, error: 'Invalid token format' };
+    }
+}
+
+/**
+ * Check if user has admin role in the neon_auth.users table
+ */
+async function checkUserIsAdmin(userId: string): Promise<boolean> {
+    const config = getConfig();
+
+    try {
+        const sql = neon(config.databaseUrl);
+        const result = await sql`
+            SELECT role FROM neon_auth.user WHERE id = ${userId}
+        ` as { role: string | null }[];
+
+        if (result.length === 0) {
+            logger.warn('User not found in neon_auth.user', { userId });
+            return false;
+        }
+
+        const isAdmin = result[0].role === 'admin';
+        logger.debug('User admin check', { userId, role: result[0].role, isAdmin });
+        return isAdmin;
+    } catch (error) {
+        logger.error('Failed to check user admin status', {
+            userId,
+            error: error instanceof Error ? error.message : 'Unknown error',
+        });
+        return false;
     }
 }
 
@@ -209,5 +253,19 @@ export function unauthorizedResponse(error: string): Response {
             message: error,
         },
         { status: 401 }
+    );
+}
+
+/**
+ * Create a forbidden response (authenticated but not authorized)
+ */
+export function forbiddenResponse(error: string): Response {
+    return Response.json(
+        {
+            success: false,
+            error: 'Forbidden',
+            message: error,
+        },
+        { status: 403 }
     );
 }

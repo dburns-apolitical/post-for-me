@@ -5,16 +5,16 @@ globs: src/routes/**/*.ts, src/index.ts
 
 # API Authentication Rules
 
-## Default: All Endpoints Protected
+## Default: All Endpoints Admin-Only
 
-All new API endpoints MUST include authentication by default. Use the `validateAuth` utility from `src/utils/auth.ts`.
+All new API endpoints MUST require admin authentication by default. Use the `validateAuth` utility from `src/utils/auth.ts`.
 
 ## Authentication Pattern
 
 Every route handler (except `/health`) must start with:
 
 ```typescript
-import { validateAuth, unauthorizedResponse } from '../utils/auth.js';
+import { validateAuth, unauthorizedResponse, forbiddenResponse } from '../utils/auth.js';
 
 export async function handleYourEndpoint(request: Request): Promise<Response> {
     // Validate authentication
@@ -22,6 +22,10 @@ export async function handleYourEndpoint(request: Request): Promise<Response> {
     if (!authResult.authenticated) {
         logger.warn('Unauthorized request', { error: authResult.error });
         return unauthorizedResponse(authResult.error || 'Unauthorized');
+    }
+    if (!authResult.isAdmin) {
+        logger.warn('Non-admin request', { userId: authResult.userId });
+        return forbiddenResponse('Admin access required');
     }
 
     // ... rest of handler
@@ -36,11 +40,11 @@ Only the following endpoint should remain unprotected:
 ## Supported Auth Methods
 
 The `validateAuth` function accepts:
-1. **Password auth**: `X-Dashboard-Password` header
-2. **Bearer token**: `Authorization: Bearer <token>` header (Neon Auth JWT)
+1. **Password auth**: `X-Dashboard-Password` header (implicitly grants admin access)
+2. **Bearer token**: `Authorization: Bearer <token>` header (Neon Auth JWT - checks `role` column in `neon_auth.user` table)
 
 ## When Adding New Routes
 
 1. Create handler in `src/routes/`
-2. Add auth check as first operation
+2. Add auth check as first operation (both authentication AND admin check)
 3. Register in `src/index.ts` passing the `request` object

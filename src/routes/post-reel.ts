@@ -1,6 +1,6 @@
 import { logger } from '../utils/logger.js';
 import { validatePostReelRequest } from '../utils/validation.js';
-import { validateAuth, unauthorizedResponse } from '../utils/auth.js';
+import { validateAuth, unauthorizedResponse, forbiddenResponse } from '../utils/auth.js';
 import type { PostReelResponse } from '../types/index.js';
 import { VideoSelectorService } from '../services/video-selector.js';
 import { VideoEditorService } from '../services/video-editor.js';
@@ -117,6 +117,10 @@ export async function handlePostReel(request: Request): Promise<Response> {
     if (!authResult.authenticated) {
         logger.warn('Unauthorized post-reel request', { error: authResult.error });
         return unauthorizedResponse(authResult.error || 'Unauthorized');
+    }
+    if (!authResult.isAdmin) {
+        logger.warn('Non-admin post-reel request', { userId: authResult.userId });
+        return forbiddenResponse('Admin access required');
     }
 
     const db = new DatabaseService();

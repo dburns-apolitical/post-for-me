@@ -1,5 +1,5 @@
 import { logger } from '../utils/logger.js';
-import { validateAuth, unauthorizedResponse } from '../utils/auth.js';
+import { validateAuth, unauthorizedResponse, forbiddenResponse } from '../utils/auth.js';
 import type { PostStatusResponse } from '../types/index.js';
 import { DatabaseService } from '../services/database.js';
 
@@ -9,6 +9,10 @@ export async function handlePostStatus(request: Request): Promise<Response> {
     if (!authResult.authenticated) {
         logger.warn('Unauthorized post-status request', { error: authResult.error });
         return unauthorizedResponse(authResult.error || 'Unauthorized');
+    }
+    if (!authResult.isAdmin) {
+        logger.warn('Non-admin post-status request', { userId: authResult.userId });
+        return forbiddenResponse('Admin access required');
     }
 
     try {
