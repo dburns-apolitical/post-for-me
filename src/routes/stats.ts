@@ -55,7 +55,7 @@ export async function handleStats(request: Request): Promise<Response> {
 
         return Response.json({
             success: true,
-            data: stats,
+            ...stats,
         });
     } catch (error) {
         logger.error('Error fetching stats', {
