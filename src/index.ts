@@ -127,7 +127,11 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 
 // CORS configuration
-const ALLOWED_ORIGINS = ['http://localhost:5173'];
+const ALLOWED_ORIGINS = [
+  'http://localhost:5173',
+  'https://molars-admin-dashboard.netlify.app',
+  'https://admin.molarsuk.com',
+];
 
 function getCorsHeaders(request: Request): Record<string, string> {
   const origin = request.headers.get('Origin');
