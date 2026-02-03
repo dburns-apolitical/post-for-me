@@ -1,6 +1,7 @@
 import { getConfig } from './config/index.js';
 import { logger } from './utils/logger.js';
 import { handlePostReel } from './routes/post-reel.js';
+import { handlePostStatus } from './routes/post-status.js';
 import { handleTestInstagram } from './routes/test-instagram.js';
 import { handleStats } from './routes/stats.js';
 import { DatabaseService } from './services/database.js';
@@ -179,6 +180,11 @@ startup().then(() => {
       // Post reel endpoint
       if (url.pathname === '/api/post-reel' && request.method === 'POST') {
         return withCors(await handlePostReel(request), request);
+      }
+
+      // Post status endpoint
+      if (url.pathname === '/api/post-status' && request.method === 'GET') {
+        return withCors(await handlePostStatus(request), request);
       }
 
       // Test Instagram credentials endpoint

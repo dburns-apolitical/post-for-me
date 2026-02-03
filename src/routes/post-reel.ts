@@ -7,6 +7,110 @@ import { VideoEditorService } from '../services/video-editor.js';
 import { InstagramClientService } from '../services/instagram-client.js';
 import { DatabaseService } from '../services/database.js';
 
+/**
+ * Background processing function that handles video editing and Instagram posting.
+ * This runs asynchronously after the HTTP response has been sent.
+ */
+async function processPostInBackground(
+    postId: number,
+    inputVideoPath: string,
+    hookText: string,
+    caption: string,
+    hashtags: string[],
+    db: DatabaseService
+): Promise<void> {
+    let editedVideoPath: string | null = null;
+    const videoSelector = new VideoSelectorService();
+    const videoEditor = new VideoEditorService();
+    const instagramClient = new InstagramClientService();
+
+    try {
+        // Step 3: Validate video format
+        logger.info('Step 3: Validating video format', { postId });
+        const validation_result = await videoEditor.validateVideoFormat(inputVideoPath);
+
+        if (!validation_result.isValid) {
+            logger.warn('Video format validation failed', { postId, ...validation_result });
+            // Continue anyway, but log the warning
+        }
+
+        // Step 4: Add text overlay to video
+        logger.info('Step 4: Adding text overlay to video', { postId });
+        editedVideoPath = await videoEditor.addTextOverlay(inputVideoPath, hookText, {
+            position: 'top',
+            fontSize: 60,
+            fontColor: 'white',
+            strokeColor: 'black',
+            strokeWidth: 3,
+        });
+
+        logger.info('Video edited successfully', { postId, editedPath: editedVideoPath });
+
+        // Step 5: Upload edited video to GCS
+        logger.info('Step 5: Uploading edited video to GCS', { postId });
+        const videoUrl = await videoSelector.uploadEditedVideo(editedVideoPath);
+
+        logger.info('Edited video uploaded', { postId, videoUrl });
+
+        // Step 6: Post to Instagram
+        logger.info('Step 6: Posting Reel to Instagram', { postId });
+        const instagramPost = await instagramClient.postReel(
+            videoUrl,
+            caption,
+            hashtags
+        );
+
+        logger.info('Reel posted successfully', {
+            postId,
+            instagramPostId: instagramPost.id,
+            status: instagramPost.status,
+        });
+
+        // Step 7: Update post status to success with Instagram post ID
+        logger.info('Step 7: Updating post status to success', { postId });
+        await db.markPostSuccess(postId, instagramPost.id);
+
+        // Step 8: Cleanup temporary files
+        logger.info('Step 8: Cleaning up temporary files', { postId });
+        videoSelector.cleanupTempFile(inputVideoPath);
+        videoEditor.cleanupTempFile(editedVideoPath);
+
+        logger.info('Post processing completed successfully', { postId });
+    } catch (error) {
+        logger.error('Error in background post processing', {
+            postId,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            stack: error instanceof Error ? error.stack : undefined,
+        });
+
+        // Update post status to failed
+        try {
+            await db.updatePostStatus(postId, 'failed');
+            logger.info('Post status updated to failed', { postId });
+        } catch (dbError) {
+            logger.warn('Failed to update post status to failed', {
+                postId,
+                error: dbError instanceof Error ? dbError.message : 'Unknown error',
+            });
+        }
+
+        // Cleanup temporary files on error
+        try {
+            videoSelector.cleanupTempFile(inputVideoPath);
+        } catch (cleanupError) {
+            logger.warn('Failed to cleanup input video on error', { postId, inputVideoPath });
+        }
+
+        if (editedVideoPath) {
+            try {
+                videoEditor.cleanupTempFile(editedVideoPath);
+            } catch (cleanupError) {
+                logger.warn('Failed to cleanup edited video on error', { postId, editedVideoPath });
+            }
+        }
+    }
+}
+
 export async function handlePostReel(request: Request): Promise<Response> {
     // Validate authentication
     const authResult = await validateAuth(request);
@@ -15,9 +119,6 @@ export async function handlePostReel(request: Request): Promise<Response> {
         return unauthorizedResponse(authResult.error || 'Unauthorized');
     }
 
-    let inputVideoPath: string | null = null;
-    let editedVideoPath: string | null = null;
-    let postId: number | null = null;
     const db = new DatabaseService();
 
     try {
@@ -39,10 +140,8 @@ export async function handlePostReel(request: Request): Promise<Response> {
             );
         }
 
-        // Initialize services
+        // Initialize video selector service
         const videoSelector = new VideoSelectorService();
-        const videoEditor = new VideoEditorService();
-        const instagramClient = new InstagramClientService();
 
         // Get values from request or auto-select from database
         let { caption, hookText, hashtags } = validation.data;
@@ -105,7 +204,6 @@ export async function handlePostReel(request: Request): Promise<Response> {
         logger.info('Step 1: Selecting prioritized video from storage');
         const postedVideos = await db.getPostedVideoTitles();
         const { videoFile, localPath } = await videoSelector.getPrioritizedVideo(postedVideos);
-        inputVideoPath = localPath;
 
         logger.info('Video selected', {
             videoName: videoFile.name,
@@ -138,7 +236,6 @@ export async function handlePostReel(request: Request): Promise<Response> {
             dbCaption.id,
             hashtagCombination.id
         );
-        postId = post.id;
 
         logger.info('Database records created', {
             postId: post.id,
@@ -148,105 +245,38 @@ export async function handlePostReel(request: Request): Promise<Response> {
             hashtagCombinationId: hashtagCombination.id,
         });
 
-        // Step 3: Validate video format
-        logger.info('Step 3: Validating video format');
-        const validation_result = await videoEditor.validateVideoFormat(inputVideoPath);
-
-        if (!validation_result.isValid) {
-            logger.warn('Video format validation failed', validation_result);
-            // Continue anyway, but log the warning
-            // In production, you might want to retry with another video
-        }
-
-        // Step 4: Add text overlay to video
-        logger.info('Step 4: Adding text overlay to video');
-        editedVideoPath = await videoEditor.addTextOverlay(inputVideoPath, hookText, {
-            position: 'top',
-            fontSize: 60,
-            fontColor: 'white',
-            strokeColor: 'black',
-            strokeWidth: 3,
+        // Start background processing (fire-and-forget)
+        // Using setImmediate to ensure the response is sent first
+        setImmediate(() => {
+            processPostInBackground(
+                post.id,
+                localPath,
+                hookText,
+                caption,
+                hashtags,
+                db
+            ).catch((err) => {
+                // This catch is a safety net - errors should be handled inside processPostInBackground
+                logger.error('Unhandled error in background processing', {
+                    postId: post.id,
+                    error: err instanceof Error ? err.message : 'Unknown error',
+                });
+            });
         });
 
-        logger.info('Video edited successfully', {
-            editedPath: editedVideoPath,
-        });
-
-        // Step 5: Upload edited video to GCS
-        logger.info('Step 5: Uploading edited video to GCS');
-        const videoUrl = await videoSelector.uploadEditedVideo(editedVideoPath);
-
-        logger.info('Edited video uploaded', {
-            videoUrl,
-        });
-
-        // Step 6: Post to Instagram
-        logger.info('Step 6: Posting Reel to Instagram');
-        const instagramPost = await instagramClient.postReel(
-            videoUrl,
-            caption,
-            hashtags
-        );
-
-        logger.info('Reel posted successfully', {
-            postId: instagramPost.id,
-            status: instagramPost.status,
-        });
-
-        // Step 7: Update post status to success with Instagram post ID
-        logger.info('Step 7: Updating post status to success');
-        await db.markPostSuccess(postId, instagramPost.id);
-
-        // Step 8: Cleanup temporary files
-        logger.info('Step 8: Cleaning up temporary files');
-        videoSelector.cleanupTempFile(inputVideoPath);
-        videoEditor.cleanupTempFile(editedVideoPath);
-
-        // Return success response
+        // Return accepted response immediately
         const response: PostReelResponse = {
             success: true,
-            postId: instagramPost.id,
-            videoUsed: videoFile.path,
+            postId: post.id,
+            message: 'Post request accepted. Use /api/post-status?postId=' + post.id + ' to check status.',
         };
 
-        return Response.json(response, { status: 200 });
+        return Response.json(response, { status: 202 });
     } catch (error) {
         logger.error('Error handling post reel request', {
             error: error instanceof Error ? error.message : 'Unknown error',
             stack: error instanceof Error ? error.stack : undefined,
         });
-
-        // Update post status to failed if we have a post ID
-        if (postId) {
-            try {
-                await db.updatePostStatus(postId, 'failed');
-                logger.info('Post status updated to failed', { postId });
-            } catch (dbError) {
-                logger.warn('Failed to update post status to failed', {
-                    postId,
-                    error: dbError instanceof Error ? dbError.message : 'Unknown error',
-                });
-            }
-        }
-
-        // Cleanup temporary files on error
-        if (inputVideoPath) {
-            try {
-                const videoSelector = new VideoSelectorService();
-                videoSelector.cleanupTempFile(inputVideoPath);
-            } catch (cleanupError) {
-                logger.warn('Failed to cleanup input video on error', { inputVideoPath });
-            }
-        }
-
-        if (editedVideoPath) {
-            try {
-                const videoEditor = new VideoEditorService();
-                videoEditor.cleanupTempFile(editedVideoPath);
-            } catch (cleanupError) {
-                logger.warn('Failed to cleanup edited video on error', { editedVideoPath });
-            }
-        }
 
         return Response.json(
             {

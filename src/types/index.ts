@@ -6,9 +6,34 @@ export interface PostReelRequest {
 
 export interface PostReelResponse {
     success: boolean;
-    postId: string;
-    videoUsed: string;
+    postId: number;
     message?: string;
+}
+
+export interface PostStatusResponse {
+    success: boolean;
+    post?: {
+        id: number;
+        status: PostStatus;
+        created_at: Date;
+        updated_at: Date;
+        instagram_post_id: string | null;
+        views: number | null;
+        video: {
+            id: number;
+            title: string;
+        };
+        hook: {
+            id: number;
+            text: string;
+        };
+        caption: {
+            id: number;
+            text: string;
+        };
+        hashtags: string[];
+    };
+    error?: string;
 }
 
 export interface VideoFile {

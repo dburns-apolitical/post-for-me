@@ -9,6 +9,7 @@ import type {
     DbHashtagCombination,
     DbVideo,
     DbPost,
+    PostWithDetails,
 } from '../types/index.js';
 
 export class DatabaseService {
@@ -356,5 +357,79 @@ export class DatabaseService {
             WHERE id = ${postId}
         `;
         logger.debug('Post views updated', { postId, views });
+    }
+
+    /**
+     * Get a post by ID with all joined details (video, hook, caption, hashtags)
+     */
+    async getPostById(postId: number): Promise<PostWithDetails | null> {
+        const rows = await this.sql`
+            SELECT 
+                p.id,
+                p.instagram_post_id,
+                p.views,
+                p.status,
+                p.created_at,
+                p.updated_at,
+                v.id as video_id,
+                v.title as video_title,
+                h.id as hook_id,
+                h.text as hook_text,
+                c.id as caption_id,
+                c.text as caption_text,
+                COALESCE(
+                    ARRAY_AGG(ht.text ORDER BY ht.id) FILTER (WHERE ht.text IS NOT NULL),
+                    ARRAY[]::text[]
+                ) as hashtags
+            FROM posts p
+            JOIN videos v ON p.video_id = v.id
+            JOIN hooks h ON p.hook_id = h.id
+            JOIN captions c ON p.caption_id = c.id
+            JOIN hashtag_combinations hc ON p.hashtag_combination_id = hc.id
+            LEFT JOIN hashtags ht ON ht.id IN (hc.hashtag1_id, hc.hashtag2_id, hc.hashtag3_id, hc.hashtag4_id, hc.hashtag5_id)
+            WHERE p.id = ${postId}
+            GROUP BY p.id, v.id, v.title, h.id, h.text, c.id, c.text
+        ` as {
+            id: number;
+            instagram_post_id: string | null;
+            views: number | null;
+            status: PostStatus;
+            created_at: Date;
+            updated_at: Date;
+            video_id: number;
+            video_title: string;
+            hook_id: number;
+            hook_text: string;
+            caption_id: number;
+            caption_text: string;
+            hashtags: string[];
+        }[];
+
+        if (rows.length === 0) {
+            return null;
+        }
+
+        const row = rows[0];
+        return {
+            id: row.id,
+            instagram_post_id: row.instagram_post_id,
+            views: row.views,
+            status: row.status,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            video: {
+                id: row.video_id,
+                title: row.video_title,
+            },
+            hook: {
+                id: row.hook_id,
+                text: row.hook_text,
+            },
+            caption: {
+                id: row.caption_id,
+                text: row.caption_text,
+            },
+            hashtags: row.hashtags || [],
+        };
     }
 }
