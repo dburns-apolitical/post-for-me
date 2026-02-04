@@ -207,11 +207,12 @@ export class DatabaseService {
         videoId: number,
         hookId: number,
         captionId: number,
-        hashtagCombinationId: number
+        hashtagCombinationId: number,
+        sharedToFeed: boolean = false
     ): Promise<DbPost> {
         const result = await this.sql`
-            INSERT INTO posts (video_id, hook_id, caption_id, hashtag_combination_id, status)
-            VALUES (${videoId}, ${hookId}, ${captionId}, ${hashtagCombinationId}, 'pending')
+            INSERT INTO posts (video_id, hook_id, caption_id, hashtag_combination_id, shared_to_feed, status)
+            VALUES (${videoId}, ${hookId}, ${captionId}, ${hashtagCombinationId}, ${sharedToFeed}, 'pending')
             RETURNING id, video_id, hook_id, caption_id, hashtag_combination_id, instagram_post_id, views, status, created_at, updated_at
         ` as DbPost[];
         return result[0];

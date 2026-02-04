@@ -7,6 +7,7 @@ export const postReelSchema = z.object({
         .min(1, 'At least one hashtag required if provided')
         .max(30, 'Maximum 30 hashtags allowed')
         .optional(),
+    shareToFeed: z.boolean().optional(),
 });
 
 export type PostReelInput = z.infer<typeof postReelSchema>;

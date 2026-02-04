@@ -2,6 +2,7 @@ export interface PostReelRequest {
     caption?: string;
     hookText?: string;
     hashtags?: string[];
+    shareToFeed?: boolean;
 }
 
 export interface PostReelResponse {

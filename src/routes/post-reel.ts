@@ -17,6 +17,7 @@ async function processPostInBackground(
     hookText: string,
     caption: string,
     hashtags: string[],
+    shareToFeed: boolean,
     db: DatabaseService
 ): Promise<void> {
     let editedVideoPath: string | null = null;
@@ -57,7 +58,8 @@ async function processPostInBackground(
         const instagramPost = await instagramClient.postReel(
             videoUrl,
             caption,
-            hashtags
+            hashtags,
+            shareToFeed
         );
 
         logger.info('Reel posted successfully', {
@@ -148,7 +150,7 @@ export async function handlePostReel(request: Request): Promise<Response> {
         const videoSelector = new VideoSelectorService();
 
         // Get values from request or auto-select from database
-        let { caption, hookText, hashtags } = validation.data;
+        let { caption, hookText, hashtags, shareToFeed } = validation.data;
 
         // Auto-select caption from database if not provided
         if (!caption) {
@@ -202,6 +204,7 @@ export async function handlePostReel(request: Request): Promise<Response> {
             captionLength: caption.length,
             hookText,
             hashtagCount: hashtags.length,
+            shareToFeed,
         });
 
         // Step 1: Select and download prioritized video from GCS (newest unused first)
@@ -238,7 +241,8 @@ export async function handlePostReel(request: Request): Promise<Response> {
             dbVideo.id,
             dbHook.id,
             dbCaption.id,
-            hashtagCombination.id
+            hashtagCombination.id,
+            shareToFeed || false
         );
 
         logger.info('Database records created', {
@@ -258,6 +262,7 @@ export async function handlePostReel(request: Request): Promise<Response> {
                 hookText,
                 caption,
                 hashtags,
+                shareToFeed || false,
                 db
             ).catch((err) => {
                 // This catch is a safety net - errors should be handled inside processPostInBackground

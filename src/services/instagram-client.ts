@@ -18,7 +18,8 @@ export class InstagramClientService {
      */
     async createMediaContainer(
         videoUrl: string,
-        caption: string
+        caption: string,
+        shareToFeed: boolean = false
     ): Promise<string> {
         try {
             const params = new URLSearchParams({
@@ -26,6 +27,7 @@ export class InstagramClientService {
                 video_url: videoUrl,
                 caption: caption,
                 access_token: this.accessToken,
+                share_to_feed: shareToFeed ? 'true' : 'false',
             });
 
             const response = await fetch(
@@ -239,7 +241,8 @@ export class InstagramClientService {
     async postReel(
         videoUrl: string,
         caption: string,
-        hashtags: string[]
+        hashtags: string[],
+        shareToFeed: boolean = false
     ): Promise<InstagramPost> {
         // Format caption with hashtags
         const hashtagString = hashtags.map((tag) => `#${tag}`).join(' ');
@@ -247,7 +250,7 @@ export class InstagramClientService {
 
         // Step 1: Create media container
         logger.info('Creating media container for Reel');
-        const containerId = await this.createMediaContainer(videoUrl, fullCaption);
+        const containerId = await this.createMediaContainer(videoUrl, fullCaption, shareToFeed);
 
         // Step 2: Wait for container to be ready
         logger.info('Waiting for container to be ready');
