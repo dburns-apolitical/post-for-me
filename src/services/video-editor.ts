@@ -125,10 +125,14 @@ export class VideoEditorService {
      */
     private escapeTextForFFmpeg(text: string): string {
         return text
-            .replace(/\\/g, '\\\\\\\\')  // Backslashes
-            .replace(/'/g, "\\\\'")       // Single quotes  
-            .replace(/:/g, '\\:')         // Colons (filter separator)
-            .replace(/%/g, '\\%');        // Percent signs
+            .replace(/\\/g, '\\\\\\\\')  // Backslashes (must be first)
+            .replace(/'/g, "'\\\\\\''")  // Single quotes: end quote, escaped quote, reopen
+            .replace(/:/g, '\\:')        // Colons (filter separator)
+            .replace(/%/g, '\\%')        // Percent signs
+            .replace(/,/g, '\\,')        // Commas (filter option separator)
+            .replace(/;/g, '\\;')        // Semicolons (filter chain separator)
+            .replace(/\[/g, '\\[')       // Square brackets (stream labels)
+            .replace(/\]/g, '\\]');
     }
 
     /**
