@@ -304,7 +304,7 @@ export class VideoEditorService {
     ): { lines: string[]; fontSize: number } {
         const usableWidth = videoWidth - (paddingX * 2);
         // Approximate character width ratio (most fonts are ~0.6x font size width)
-        const charWidthRatio = 0.55;
+        const charWidthRatio = 0.7;
 
         let fontSize = maxFontSize;
 
