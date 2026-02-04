@@ -150,12 +150,12 @@ export class VideoEditorService {
         paddingY: number
     ): Promise<void> {
         return new Promise((resolve, reject) => {
-            // Find a suitable font file (macOS or Linux paths)
+            // Find a suitable bold font file (macOS or Linux paths)
             const fontPaths = [
-                '/System/Library/Fonts/Helvetica.ttc',           // macOS
-                '/System/Library/Fonts/Supplemental/Arial.ttf',  // macOS
-                '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', // Linux/Docker
-                '/usr/share/fonts/TTF/DejaVuSans.ttf',           // Alpine Linux
+                '/System/Library/Fonts/Supplemental/Arial Bold.ttf',  // macOS bold
+                '/System/Library/Fonts/Helvetica.ttc',                // macOS (fallback)
+                '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', // Linux/Docker bold
+                '/usr/share/fonts/TTF/DejaVuSans-Bold.ttf',           // Alpine Linux bold
             ];
 
             let fontFile = '';
@@ -177,7 +177,7 @@ export class VideoEditorService {
             let baseY: number;
             switch (position) {
                 case 'top':
-                    baseY = paddingY;
+                    baseY = -3; // Marker for percentage-based top positioning (25% from top)
                     break;
                 case 'center':
                     // This will be calculated as expression for center
@@ -187,7 +187,7 @@ export class VideoEditorService {
                     baseY = -2; // Marker for bottom positioning
                     break;
                 default:
-                    baseY = paddingY;
+                    baseY = -3; // Default to percentage-based top positioning
             }
 
             // Build filter strings - one drawtext per line for reliable multi-line support
@@ -202,8 +202,11 @@ export class VideoEditorService {
                 } else if (baseY === -2) {
                     // Bottom: calculate from bottom
                     yPosition = `h-${totalTextHeight}-${paddingY}+${lineOffset}`;
+                } else if (baseY === -3) {
+                    // Top at 25% of video height
+                    yPosition = `(h*0.25)+${lineOffset}`;
                 } else {
-                    // Top or default
+                    // Fallback to fixed pixel position
                     yPosition = `${baseY + lineOffset}`;
                 }
 
