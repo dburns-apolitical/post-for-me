@@ -100,7 +100,7 @@ export class ViewsSyncCronService {
                         continue;
                     }
 
-                    const views = await this.instagram.getMediaInsights(post.instagram_post_id);
+                    const views = await this.instagram.getMediaInsights(post.account_id, post.instagram_post_id);
                     await this.db.updatePostViews(post.id, views);
 
                     logger.info('Updated views for post', {
