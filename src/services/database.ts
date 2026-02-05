@@ -480,4 +480,16 @@ export class DatabaseService {
         ` as DbAccount[];
         return result;
     }
+
+    /**
+     * Get all captions from the database
+     */
+    async getAllCaptions(): Promise<DbCaption[]> {
+        const result = await this.sql`
+            SELECT id, text, created_at
+            FROM captions
+            ORDER BY created_at DESC
+        ` as DbCaption[];
+        return result;
+    }
 }

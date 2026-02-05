@@ -304,4 +304,27 @@ describe('DatabaseService', () => {
             expect(result).toHaveLength(2);
         });
     });
+
+    describe('getAllCaptions', () => {
+        test('should return all captions ordered by created_at desc', async () => {
+            const mockCaptions = [
+                { id: 2, text: 'Newer caption', created_at: new Date('2025-02-01') },
+                { id: 1, text: 'Older caption', created_at: new Date('2025-01-01') },
+            ];
+            mockSql.mockResolvedValueOnce(mockCaptions);
+
+            const result = await db.getAllCaptions();
+
+            expect(result).toEqual(mockCaptions);
+            expect(result).toHaveLength(2);
+        });
+
+        test('should return empty array when no captions', async () => {
+            mockSql.mockResolvedValueOnce([]);
+
+            const result = await db.getAllCaptions();
+
+            expect(result).toEqual([]);
+        });
+    });
 });
