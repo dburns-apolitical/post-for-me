@@ -103,7 +103,7 @@ describe('DatabaseService', () => {
     });
 
     describe('createPost', () => {
-        test('should create post with pending status', async () => {
+        test('should create post with pending status and default accountId', async () => {
             const mockPost = {
                 id: 1,
                 video_id: 1,
@@ -113,6 +113,7 @@ describe('DatabaseService', () => {
                 instagram_post_id: null,
                 views: null,
                 status: 'pending' as PostStatus,
+                account_id: 2,
                 created_at: new Date(),
                 updated_at: new Date(),
             };
@@ -122,7 +123,29 @@ describe('DatabaseService', () => {
 
             expect(result).toEqual(mockPost);
             expect(result.status).toBe('pending');
-            expect(result.instagram_post_id).toBeNull();
+            expect(result.account_id).toBe(2);
+        });
+
+        test('should create post with specified accountId', async () => {
+            const mockPost = {
+                id: 2,
+                video_id: 1,
+                hook_id: 1,
+                caption_id: 1,
+                hashtag_combination_id: 1,
+                instagram_post_id: null,
+                views: null,
+                status: 'pending' as PostStatus,
+                account_id: 1,
+                created_at: new Date(),
+                updated_at: new Date(),
+            };
+            mockSql.mockResolvedValueOnce([mockPost]);
+
+            const result = await db.createPost(1, 1, 1, 1, false, 1);
+
+            expect(result).toEqual(mockPost);
+            expect(result.account_id).toBe(1);
         });
     });
 
@@ -161,21 +184,21 @@ describe('DatabaseService', () => {
     });
 
     describe('getPostedVideoTitles', () => {
-        test('should return array of video titles', async () => {
+        test('should return array of video titles for account', async () => {
             mockSql.mockResolvedValueOnce([
                 { title: 'video1.mp4' },
                 { title: 'video2.mp4' },
             ]);
 
-            const result = await db.getPostedVideoTitles();
+            const result = await db.getPostedVideoTitles(2);
 
             expect(result).toEqual(['video1.mp4', 'video2.mp4']);
         });
 
-        test('should return empty array when no videos', async () => {
+        test('should return empty array when no videos for account', async () => {
             mockSql.mockResolvedValueOnce([]);
 
-            const result = await db.getPostedVideoTitles();
+            const result = await db.getPostedVideoTitles(1);
 
             expect(result).toEqual([]);
         });
@@ -264,6 +287,21 @@ describe('DatabaseService', () => {
             const result = await db.getHashtagCount();
 
             expect(result).toBe(20);
+        });
+    });
+
+    describe('getAccounts', () => {
+        test('should return all accounts', async () => {
+            const mockAccounts = [
+                { id: 1, name: 'Molars UK (MAIN ACCOUNT)', created_at: new Date() },
+                { id: 2, name: 'MLRSUK (BACKUP ACCOUNT)', created_at: new Date() },
+            ];
+            mockSql.mockResolvedValueOnce(mockAccounts);
+
+            const result = await db.getAccounts();
+
+            expect(result).toEqual(mockAccounts);
+            expect(result).toHaveLength(2);
         });
     });
 });
