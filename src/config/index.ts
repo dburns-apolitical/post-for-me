@@ -4,8 +4,10 @@ export function getConfig(): Config {
     const requiredEnvVars = [
         'GCS_PROJECT_ID',
         'GCS_BUCKET_NAME',
-        'INSTAGRAM_ACCESS_TOKEN',
-        'INSTAGRAM_USER_ID',
+        'INSTAGRAM_ACCESS_TOKEN_1',
+        'INSTAGRAM_USER_ID_1',
+        'INSTAGRAM_ACCESS_TOKEN_2',
+        'INSTAGRAM_USER_ID_2',
         'DATABASE_URL',
     ];
 
@@ -24,8 +26,16 @@ export function getConfig(): Config {
             keyFilePath: '', // No longer needed for public bucket access
         },
         instagram: {
-            accessToken: process.env.INSTAGRAM_ACCESS_TOKEN || '',
-            userId: process.env.INSTAGRAM_USER_ID || '',
+            accounts: {
+                1: {
+                    accessToken: process.env.INSTAGRAM_ACCESS_TOKEN_1 || '',
+                    userId: process.env.INSTAGRAM_USER_ID_1 || '',
+                },
+                2: {
+                    accessToken: process.env.INSTAGRAM_ACCESS_TOKEN_2 || '',
+                    userId: process.env.INSTAGRAM_USER_ID_2 || '',
+                },
+            },
         },
         tempDir: process.env.TEMP_DIR || './tmp',
         databaseUrl: process.env.DATABASE_URL || '',
