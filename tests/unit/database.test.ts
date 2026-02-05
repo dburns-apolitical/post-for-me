@@ -327,4 +327,27 @@ describe('DatabaseService', () => {
             expect(result).toEqual([]);
         });
     });
+
+    describe('getAllHooks', () => {
+        test('should return all hooks ordered by created_at desc', async () => {
+            const mockHooks = [
+                { id: 2, text: 'Newer hook', created_at: new Date('2025-02-01') },
+                { id: 1, text: 'Older hook', created_at: new Date('2025-01-01') },
+            ];
+            mockSql.mockResolvedValueOnce(mockHooks);
+
+            const result = await db.getAllHooks();
+
+            expect(result).toEqual(mockHooks);
+            expect(result).toHaveLength(2);
+        });
+
+        test('should return empty array when no hooks', async () => {
+            mockSql.mockResolvedValueOnce([]);
+
+            const result = await db.getAllHooks();
+
+            expect(result).toEqual([]);
+        });
+    });
 });

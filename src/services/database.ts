@@ -492,4 +492,16 @@ export class DatabaseService {
         ` as DbCaption[];
         return result;
     }
+
+    /**
+     * Get all hooks from the database
+     */
+    async getAllHooks(): Promise<DbHook[]> {
+        const result = await this.sql`
+            SELECT id, text, created_at
+            FROM hooks
+            ORDER BY created_at DESC
+        ` as DbHook[];
+        return result;
+    }
 }
