@@ -163,6 +163,29 @@ describe('End-to-End Integration Tests', () => {
     });
   });
 
+  describe('GET /api/stats - Account Filtering', () => {
+    test('should reject invalid accountId query param', async () => {
+      const response = await fetch(`${BASE_URL}/api/stats?accountId=3`);
+
+      expect(response.status).toBe(400);
+      const data = await response.json() as ApiResponse;
+      expect(data.success).toBe(false);
+    });
+
+    test('should accept valid accountId query param', async () => {
+      const response = await fetch(`${BASE_URL}/api/stats?accountId=1`);
+
+      // May fail due to auth, but shouldn't be 400 for accountId
+      expect([200, 401, 403]).toContain(response.status);
+    });
+
+    test('should accept no accountId (returns all)', async () => {
+      const response = await fetch(`${BASE_URL}/api/stats`);
+
+      expect([200, 401, 403]).toContain(response.status);
+    });
+  });
+
   describe('Error Handling', () => {
     test('should return 404 for unknown routes', async () => {
       const response = await fetch(`${BASE_URL}/unknown-route`);

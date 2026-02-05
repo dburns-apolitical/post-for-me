@@ -129,4 +129,47 @@ describe('POST /api/post-reel', () => {
     expect(data.success).toBe(false);
     expect(data.error).toBe('Validation failed');
   });
+
+  test('should reject invalid accountId', async () => {
+    const response = await fetch(`${BASE_URL}/api/post-reel`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        caption: 'Caption',
+        hookText: 'Hook',
+        hashtags: ['test'],
+        accountId: 3,
+      }),
+    });
+
+    expect(response.status).toBe(400);
+    const data = await response.json() as ApiResponse;
+    expect(data.success).toBe(false);
+    expect(data.error).toBe('Validation failed');
+  });
+
+  test('should accept valid accountId', async () => {
+    const response = await fetch(`${BASE_URL}/api/post-reel`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        caption: 'Caption',
+        hookText: 'Hook',
+        hashtags: ['test'],
+        accountId: 1,
+      }),
+    });
+
+    // Should pass validation (may fail later due to credentials)
+    expect([202, 400, 500]).toContain(response.status);
+    if (response.status === 400) {
+      const data = await response.json() as ApiResponse;
+      // If 400, it shouldn't be a validation error for accountId
+      expect(data.error).not.toBe('Validation failed');
+    }
+  });
 });
