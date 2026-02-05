@@ -3,35 +3,43 @@ import { logger } from '../utils/logger.js';
 import type { InstagramPost } from '../types/index.js';
 
 export class InstagramClientService {
-    private accessToken: string;
-    private userId: string;
+    private accounts: Record<number, { accessToken: string; userId: string }>;
     private baseUrl = 'https://graph.instagram.com/v18.0';
 
     constructor() {
         const config = getConfig();
-        this.accessToken = config.instagram.accessToken;
-        this.userId = config.instagram.userId;
+        this.accounts = config.instagram.accounts;
+    }
+
+    private getCredentials(accountId: number): { accessToken: string; userId: string } {
+        const creds = this.accounts[accountId];
+        if (!creds) {
+            throw new Error(`No credentials found for account ID ${accountId}`);
+        }
+        return creds;
     }
 
     /**
      * Create a media container for a Reel
      */
     async createMediaContainer(
+        accountId: number,
         videoUrl: string,
         caption: string,
         shareToFeed: boolean = false
     ): Promise<string> {
+        const { accessToken, userId } = this.getCredentials(accountId);
         try {
             const params = new URLSearchParams({
                 media_type: 'REELS',
                 video_url: videoUrl,
                 caption: caption,
-                access_token: this.accessToken,
+                access_token: accessToken,
                 share_to_feed: shareToFeed ? 'true' : 'false',
             });
 
             const response = await fetch(
-                `${this.baseUrl}/${this.userId}/media?${params}`,
+                `${this.baseUrl}/${userId}/media?${params}`,
                 { method: 'POST' }
             );
 
@@ -65,12 +73,14 @@ export class InstagramClientService {
      * Check the status of a media container
      */
     async checkContainerStatus(
+        accountId: number,
         containerId: string
     ): Promise<{ status: string; errorMessage?: string }> {
+        const { accessToken } = this.getCredentials(accountId);
         try {
             const params = new URLSearchParams({
                 fields: 'status_code,status',
-                access_token: this.accessToken,
+                access_token: accessToken,
             });
 
             const response = await fetch(
@@ -103,6 +113,7 @@ export class InstagramClientService {
      * Wait for container to be ready (poll with backoff)
      */
     async waitForContainerReady(
+        accountId: number,
         containerId: string,
         maxAttempts: number = 30,
         initialDelayMs: number = 5000
@@ -111,7 +122,7 @@ export class InstagramClientService {
         let delayMs = initialDelayMs;
 
         while (attempts < maxAttempts) {
-            const { status, errorMessage } = await this.checkContainerStatus(containerId);
+            const { status, errorMessage } = await this.checkContainerStatus(accountId, containerId);
 
             logger.info('Container status check', {
                 containerId,
@@ -144,15 +155,16 @@ export class InstagramClientService {
     /**
      * Publish a media container
      */
-    async publishMedia(containerId: string): Promise<string> {
+    async publishMedia(accountId: number, containerId: string): Promise<string> {
+        const { accessToken, userId } = this.getCredentials(accountId);
         try {
             const params = new URLSearchParams({
                 creation_id: containerId,
-                access_token: this.accessToken,
+                access_token: accessToken,
             });
 
             const response = await fetch(
-                `${this.baseUrl}/${this.userId}/media_publish?${params}`,
+                `${this.baseUrl}/${userId}/media_publish?${params}`,
                 { method: 'POST' }
             );
 
@@ -186,20 +198,21 @@ export class InstagramClientService {
     /**
      * Get basic account info to verify credentials
      */
-    async getAccountInfo(): Promise<{
+    async getAccountInfo(accountId: number): Promise<{
         id: string;
         username: string;
         account_type: string;
         media_count: number;
     }> {
+        const { accessToken, userId } = this.getCredentials(accountId);
         try {
             const params = new URLSearchParams({
                 fields: 'id,username,account_type,media_count',
-                access_token: this.accessToken,
+                access_token: accessToken,
             });
 
             const response = await fetch(
-                `${this.baseUrl}/${this.userId}?${params}`
+                `${this.baseUrl}/${userId}?${params}`
             );
 
             if (!response.ok) {
@@ -239,6 +252,7 @@ export class InstagramClientService {
      * Post a Reel to Instagram (full flow)
      */
     async postReel(
+        accountId: number,
         videoUrl: string,
         caption: string,
         hashtags: string[],
@@ -249,16 +263,16 @@ export class InstagramClientService {
         const fullCaption = `${caption}\n\n${hashtagString}`;
 
         // Step 1: Create media container
-        logger.info('Creating media container for Reel');
-        const containerId = await this.createMediaContainer(videoUrl, fullCaption, shareToFeed);
+        logger.info('Creating media container for Reel', { accountId });
+        const containerId = await this.createMediaContainer(accountId, videoUrl, fullCaption, shareToFeed);
 
         // Step 2: Wait for container to be ready
-        logger.info('Waiting for container to be ready');
-        await this.waitForContainerReady(containerId);
+        logger.info('Waiting for container to be ready', { accountId });
+        await this.waitForContainerReady(accountId, containerId);
 
         // Step 3: Publish the media
-        logger.info('Publishing Reel');
-        const mediaId = await this.publishMedia(containerId);
+        logger.info('Publishing Reel', { accountId });
+        const mediaId = await this.publishMedia(accountId, containerId);
 
         return {
             id: mediaId,
@@ -270,11 +284,12 @@ export class InstagramClientService {
     /**
      * Get media insights (views) for a specific media post
      */
-    async getMediaInsights(mediaId: string): Promise<number> {
+    async getMediaInsights(accountId: number, mediaId: string): Promise<number> {
+        const { accessToken } = this.getCredentials(accountId);
         try {
             const params = new URLSearchParams({
                 metric: 'ig_reels_aggregated_all_plays_count',
-                access_token: this.accessToken,
+                access_token: accessToken,
             });
 
             const response = await fetch(
