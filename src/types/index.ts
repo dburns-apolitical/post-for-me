@@ -3,6 +3,7 @@ export interface PostReelRequest {
     hookText?: string;
     hashtags?: string[];
     shareToFeed?: boolean;
+    accountId?: number;
 }
 
 export interface PostReelResponse {
@@ -59,8 +60,7 @@ export interface Config {
         keyFilePath: string;
     };
     instagram: {
-        accessToken: string;
-        userId: string;
+        accounts: Record<number, { accessToken: string; userId: string }>;
     };
     tempDir: string;
     databaseUrl: string;
@@ -108,12 +108,19 @@ export interface DbVideo {
     created_at: Date;
 }
 
+export interface DbAccount {
+    id: number;
+    name: string;
+    created_at: Date;
+}
+
 export interface DbPost {
     id: number;
     video_id: number;
     hook_id: number;
     caption_id: number;
     hashtag_combination_id: number;
+    account_id: number;
     instagram_post_id: string | null;
     views: number | null;
     status: PostStatus;
