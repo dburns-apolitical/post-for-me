@@ -13,6 +13,7 @@ import { DatabaseService } from '../services/database.js';
  */
 async function processPostInBackground(
     postId: number,
+    accountId: number,
     inputVideoPath: string,
     hookText: string,
     caption: string,
@@ -56,6 +57,7 @@ async function processPostInBackground(
         // Step 6: Post to Instagram
         logger.info('Step 6: Posting Reel to Instagram', { postId });
         const instagramPost = await instagramClient.postReel(
+            accountId,
             videoUrl,
             caption,
             hashtags,
@@ -151,6 +153,7 @@ export async function handlePostReel(request: Request): Promise<Response> {
 
         // Get values from request or auto-select from database
         let { caption, hookText, hashtags, shareToFeed } = validation.data;
+        const accountId = validation.data.accountId ?? 2;
 
         // Auto-select caption from database if not provided
         if (!caption) {
@@ -205,11 +208,12 @@ export async function handlePostReel(request: Request): Promise<Response> {
             hookText,
             hashtagCount: hashtags.length,
             shareToFeed,
+            accountId,
         });
 
         // Step 1: Select and download prioritized video from GCS (newest unused first)
         logger.info('Step 1: Selecting prioritized video from storage');
-        const postedVideos = await db.getPostedVideoTitles();
+        const postedVideos = await db.getPostedVideoTitles(accountId);
         const { videoFile, localPath } = await videoSelector.getPrioritizedVideo(postedVideos);
 
         logger.info('Video selected', {
@@ -242,7 +246,8 @@ export async function handlePostReel(request: Request): Promise<Response> {
             dbHook.id,
             dbCaption.id,
             hashtagCombination.id,
-            shareToFeed || false
+            shareToFeed || false,
+            accountId
         );
 
         logger.info('Database records created', {
@@ -258,6 +263,7 @@ export async function handlePostReel(request: Request): Promise<Response> {
         setImmediate(() => {
             processPostInBackground(
                 post.id,
+                accountId,
                 localPath,
                 hookText,
                 caption,
