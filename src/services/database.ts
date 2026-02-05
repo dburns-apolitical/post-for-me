@@ -3,6 +3,7 @@ import { getConfig } from '../config/index.js';
 import { logger } from '../utils/logger.js';
 import type {
     PostStatus,
+    DbAccount,
     DbCaption,
     DbHashtag,
     DbHook,
@@ -85,6 +86,24 @@ export class DatabaseService {
             )
         `;
 
+        await this.sql`
+            CREATE TABLE IF NOT EXISTS accounts (
+                id SERIAL PRIMARY KEY,
+                name TEXT UNIQUE NOT NULL,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        `;
+
+        // Seed default accounts
+        await this.sql`
+            INSERT INTO accounts (id, name) VALUES (1, 'Molars UK (MAIN ACCOUNT)')
+            ON CONFLICT (id) DO NOTHING
+        `;
+        await this.sql`
+            INSERT INTO accounts (id, name) VALUES (2, 'MLRSUK (BACKUP ACCOUNT)')
+            ON CONFLICT (id) DO NOTHING
+        `;
+
         // Add instagram_post_id column if it doesn't exist (migration for existing tables)
         await this.sql`
             DO $$
@@ -98,6 +117,19 @@ export class DatabaseService {
             END $$
         `;
 
+        // Add account_id column if it doesn't exist (migration for multi-account support)
+        await this.sql`
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'posts' AND column_name = 'account_id'
+                ) THEN
+                    ALTER TABLE posts ADD COLUMN account_id INTEGER NOT NULL DEFAULT 2 REFERENCES accounts(id);
+                END IF;
+            END $$
+        `;
+
         // Create index for faster lookups
         await this.sql`
             CREATE INDEX IF NOT EXISTS idx_posts_status ON posts(status)
@@ -105,6 +137,10 @@ export class DatabaseService {
 
         await this.sql`
             CREATE INDEX IF NOT EXISTS idx_videos_title ON videos(title)
+        `;
+
+        await this.sql`
+            CREATE INDEX IF NOT EXISTS idx_posts_account_id ON posts(account_id)
         `;
 
         logger.info('Database schema initialized');
@@ -208,12 +244,13 @@ export class DatabaseService {
         hookId: number,
         captionId: number,
         hashtagCombinationId: number,
-        sharedToFeed: boolean = false
+        sharedToFeed: boolean = false,
+        accountId: number = 2
     ): Promise<DbPost> {
         const result = await this.sql`
-            INSERT INTO posts (video_id, hook_id, caption_id, hashtag_combination_id, shared_to_feed, status)
-            VALUES (${videoId}, ${hookId}, ${captionId}, ${hashtagCombinationId}, ${sharedToFeed}, 'pending')
-            RETURNING id, video_id, hook_id, caption_id, hashtag_combination_id, instagram_post_id, views, status, created_at, updated_at
+            INSERT INTO posts (video_id, hook_id, caption_id, hashtag_combination_id, shared_to_feed, account_id, status)
+            VALUES (${videoId}, ${hookId}, ${captionId}, ${hashtagCombinationId}, ${sharedToFeed}, ${accountId}, 'pending')
+            RETURNING id, video_id, hook_id, caption_id, hashtag_combination_id, instagram_post_id, views, status, account_id, created_at, updated_at
         ` as DbPost[];
         return result[0];
     }
@@ -262,9 +299,11 @@ export class DatabaseService {
     /**
      * Get all posted video titles (for video selection logic)
      */
-    async getPostedVideoTitles(): Promise<string[]> {
+    async getPostedVideoTitles(accountId: number): Promise<string[]> {
         const result = await this.sql`
-            SELECT title FROM videos
+            SELECT DISTINCT v.title FROM posts p
+            JOIN videos v ON p.video_id = v.id
+            WHERE p.account_id = ${accountId}
         ` as { title: string }[];
         return result.map((row) => row.title);
     }
@@ -337,8 +376,8 @@ export class DatabaseService {
      */
     async getPostsNeedingViewsUpdate(): Promise<DbPost[]> {
         const result = await this.sql`
-            SELECT id, video_id, hook_id, caption_id, hashtag_combination_id, 
-                   instagram_post_id, views, status, created_at, updated_at
+            SELECT id, video_id, hook_id, caption_id, hashtag_combination_id,
+                   instagram_post_id, views, status, account_id, created_at, updated_at
             FROM posts
             WHERE status = 'success'
               AND views IS NULL
@@ -432,5 +471,12 @@ export class DatabaseService {
             },
             hashtags: row.hashtags || [],
         };
+    }
+
+    async getAccounts(): Promise<DbAccount[]> {
+        const result = await this.sql`
+            SELECT id, name, created_at FROM accounts ORDER BY id
+        ` as DbAccount[];
+        return result;
     }
 }
