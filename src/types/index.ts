@@ -121,6 +121,7 @@ export interface DbPost {
     caption_id: number;
     hashtag_combination_id: number;
     account_id: number;
+    shared_to_feed: boolean;
     instagram_post_id: string | null;
     views: number | null;
     status: PostStatus;

@@ -80,6 +80,7 @@ export class DatabaseService {
                 hashtag_combination_id INTEGER NOT NULL REFERENCES hashtag_combinations(id),
                 instagram_post_id TEXT,
                 views INTEGER,
+                shared_to_feed BOOLEAN DEFAULT FALSE,
                 status TEXT NOT NULL DEFAULT 'pending',
                 created_at TIMESTAMP DEFAULT NOW(),
                 updated_at TIMESTAMP DEFAULT NOW()
