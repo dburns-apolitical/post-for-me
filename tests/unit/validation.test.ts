@@ -124,5 +124,85 @@ describe('Validation', () => {
             const result = validatePostReelRequest(input);
             expect(result.success).toBe(true);
         });
+
+        test('should pass with valid accountId', () => {
+            const input = {
+                caption: 'Caption',
+                hookText: 'Hook',
+                hashtags: ['test'],
+                accountId: 1,
+            };
+
+            const result = validatePostReelRequest(input);
+            expect(result.success).toBe(true);
+            if (result.success) {
+                expect(result.data.accountId).toBe(1);
+            }
+        });
+
+        test('should pass with accountId 2', () => {
+            const input = {
+                caption: 'Caption',
+                hookText: 'Hook',
+                hashtags: ['test'],
+                accountId: 2,
+            };
+
+            const result = validatePostReelRequest(input);
+            expect(result.success).toBe(true);
+            if (result.success) {
+                expect(result.data.accountId).toBe(2);
+            }
+        });
+
+        test('should fail with accountId 0', () => {
+            const input = {
+                caption: 'Caption',
+                hookText: 'Hook',
+                hashtags: ['test'],
+                accountId: 0,
+            };
+
+            const result = validatePostReelRequest(input);
+            expect(result.success).toBe(false);
+        });
+
+        test('should fail with accountId 3', () => {
+            const input = {
+                caption: 'Caption',
+                hookText: 'Hook',
+                hashtags: ['test'],
+                accountId: 3,
+            };
+
+            const result = validatePostReelRequest(input);
+            expect(result.success).toBe(false);
+        });
+
+        test('should fail with non-integer accountId', () => {
+            const input = {
+                caption: 'Caption',
+                hookText: 'Hook',
+                hashtags: ['test'],
+                accountId: 1.5,
+            };
+
+            const result = validatePostReelRequest(input);
+            expect(result.success).toBe(false);
+        });
+
+        test('should pass when accountId is not provided', () => {
+            const input = {
+                caption: 'Caption',
+                hookText: 'Hook',
+                hashtags: ['test'],
+            };
+
+            const result = validatePostReelRequest(input);
+            expect(result.success).toBe(true);
+            if (result.success) {
+                expect(result.data.accountId).toBeUndefined();
+            }
+        });
     });
 });
