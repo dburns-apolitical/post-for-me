@@ -204,5 +204,47 @@ describe('Validation', () => {
                 expect(result.data.accountId).toBeUndefined();
             }
         });
+
+        test('should pass with valid videoTitle', () => {
+            const input = {
+                videoTitle: 'beach_sunset.mp4',
+            };
+
+            const result = validatePostReelRequest(input);
+            expect(result.success).toBe(true);
+            if (result.success) {
+                expect(result.data.videoTitle).toBe('beach_sunset.mp4');
+            }
+        });
+
+        test('should pass when videoTitle is not provided', () => {
+            const input = {
+                caption: 'Caption',
+            };
+
+            const result = validatePostReelRequest(input);
+            expect(result.success).toBe(true);
+            if (result.success) {
+                expect(result.data.videoTitle).toBeUndefined();
+            }
+        });
+
+        test('should fail when videoTitle is too long', () => {
+            const input = {
+                videoTitle: 'a'.repeat(501),
+            };
+
+            const result = validatePostReelRequest(input);
+            expect(result.success).toBe(false);
+        });
+
+        test('should fail when videoTitle is empty string', () => {
+            const input = {
+                videoTitle: '',
+            };
+
+            const result = validatePostReelRequest(input);
+            expect(result.success).toBe(false);
+        });
     });
 });

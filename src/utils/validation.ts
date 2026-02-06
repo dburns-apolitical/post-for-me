@@ -9,6 +9,7 @@ export const postReelSchema = z.object({
         .optional(),
     shareToFeed: z.boolean().optional(),
     accountId: z.number().int().min(1).max(2).optional(),
+    videoTitle: z.string().min(1, 'Video title cannot be empty').max(500, 'Video title too long').optional(),
 });
 
 export type PostReelInput = z.infer<typeof postReelSchema>;
