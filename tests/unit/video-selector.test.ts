@@ -147,4 +147,75 @@ describe('VideoSelectorService', () => {
       }
     });
   });
+
+  describe('findVideoByTitle', () => {
+    test('should return video when title matches exactly', async () => {
+      const service = new VideoSelectorService();
+
+      const originalFetch = global.fetch;
+      global.fetch = mock(() => Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          items: [
+            { name: 'video1.mp4', timeCreated: '2025-01-01T00:00:00Z' },
+            { name: 'video2.mov', timeCreated: '2025-01-02T00:00:00Z' },
+          ],
+        }),
+      }) as unknown as typeof fetch);
+
+      try {
+        const result = await service.findVideoByTitle('video1.mp4');
+
+        expect(result).not.toBeNull();
+        expect(result?.name).toBe('video1.mp4');
+      } finally {
+        global.fetch = originalFetch;
+      }
+    });
+
+    test('should return null when title does not match', async () => {
+      const service = new VideoSelectorService();
+
+      const originalFetch = global.fetch;
+      global.fetch = mock(() => Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          items: [
+            { name: 'video1.mp4', timeCreated: '2025-01-01T00:00:00Z' },
+            { name: 'video2.mov', timeCreated: '2025-01-02T00:00:00Z' },
+          ],
+        }),
+      }) as unknown as typeof fetch);
+
+      try {
+        const result = await service.findVideoByTitle('nonexistent.mp4');
+
+        expect(result).toBeNull();
+      } finally {
+        global.fetch = originalFetch;
+      }
+    });
+
+    test('should be case-sensitive (exact match only)', async () => {
+      const service = new VideoSelectorService();
+
+      const originalFetch = global.fetch;
+      global.fetch = mock(() => Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          items: [
+            { name: 'Video1.mp4', timeCreated: '2025-01-01T00:00:00Z' },
+          ],
+        }),
+      }) as unknown as typeof fetch);
+
+      try {
+        const result = await service.findVideoByTitle('video1.mp4');
+
+        expect(result).toBeNull();
+      } finally {
+        global.fetch = originalFetch;
+      }
+    });
+  });
 });

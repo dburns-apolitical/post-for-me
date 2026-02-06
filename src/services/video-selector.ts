@@ -79,6 +79,15 @@ export class VideoSelectorService {
     }
 
     /**
+     * Find a specific video by its exact title/filename
+     * Returns null if not found
+     */
+    async findVideoByTitle(title: string): Promise<VideoFile | null> {
+        const videos = await this.listVideos();
+        return videos.find((v) => v.name === title) ?? null;
+    }
+
+    /**
      * Select a random video from available videos
      */
     async selectRandomVideo(): Promise<VideoFile> {
