@@ -209,6 +209,7 @@ export async function handlePostReel(request: Request): Promise<Response> {
             hashtagCount: hashtags.length,
             shareToFeed,
             accountId,
+            videoTitle: validation.data.videoTitle || null,
         });
 
         // Step 1: Select video - use videoTitle if provided, otherwise prioritized selection
