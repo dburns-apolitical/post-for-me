@@ -70,6 +70,15 @@ export class VideoSelectorService {
     }
 
     /**
+     * List all video filenames in the GCS bucket (names only, no metadata)
+     * Used by the dashboard to display available videos for selection
+     */
+    async listAllVideoNames(): Promise<string[]> {
+        const videos = await this.listVideos();
+        return videos.map((v) => v.name);
+    }
+
+    /**
      * Select a random video from available videos
      */
     async selectRandomVideo(): Promise<VideoFile> {

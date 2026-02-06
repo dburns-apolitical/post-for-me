@@ -100,4 +100,51 @@ describe('VideoSelectorService', () => {
       }).not.toThrow();
     });
   });
+
+  describe('listAllVideoNames', () => {
+    test('should return array of video filenames', async () => {
+      const service = new VideoSelectorService();
+
+      // Mock fetch for GCS API
+      const originalFetch = global.fetch;
+      global.fetch = mock(() => Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          items: [
+            { name: 'video1.mp4', timeCreated: '2025-01-01T00:00:00Z' },
+            { name: 'video2.mov', timeCreated: '2025-01-02T00:00:00Z' },
+            { name: 'edited/video3.mp4', timeCreated: '2025-01-03T00:00:00Z' },
+            { name: 'document.pdf', timeCreated: '2025-01-04T00:00:00Z' },
+          ],
+        }),
+      }) as unknown as typeof fetch);
+
+      try {
+        const result = await service.listAllVideoNames();
+
+        expect(result).toEqual(['video1.mp4', 'video2.mov']);
+        expect(result).not.toContain('edited/video3.mp4');
+        expect(result).not.toContain('document.pdf');
+      } finally {
+        global.fetch = originalFetch;
+      }
+    });
+
+    test('should return empty array when no videos', async () => {
+      const service = new VideoSelectorService();
+
+      const originalFetch = global.fetch;
+      global.fetch = mock(() => Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ items: [] }),
+      }) as unknown as typeof fetch);
+
+      try {
+        const result = await service.listAllVideoNames();
+        expect(result).toEqual([]);
+      } finally {
+        global.fetch = originalFetch;
+      }
+    });
+  });
 });
