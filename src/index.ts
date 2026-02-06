@@ -4,6 +4,9 @@ import { handlePostReel } from './routes/post-reel.js';
 import { handlePostStatus } from './routes/post-status.js';
 import { handleTestInstagram } from './routes/test-instagram.js';
 import { handleStats } from './routes/stats.js';
+import { handleCaptions } from './routes/captions.js';
+import { handleHooks } from './routes/hooks.js';
+import { handleVideos } from './routes/videos.js';
 import { DatabaseService } from './services/database.js';
 import { ViewsSyncCronService } from './services/views-sync-cron.js';
 import * as fs from 'fs';
@@ -199,6 +202,21 @@ startup().then(() => {
       // Dashboard stats endpoint (requires authentication)
       if (url.pathname === '/api/stats' && request.method === 'GET') {
         return withCors(await handleStats(request), request);
+      }
+
+      // List captions endpoint (requires authentication)
+      if (url.pathname === '/api/captions' && request.method === 'GET') {
+        return withCors(await handleCaptions(request), request);
+      }
+
+      // List hooks endpoint (requires authentication)
+      if (url.pathname === '/api/hooks' && request.method === 'GET') {
+        return withCors(await handleHooks(request), request);
+      }
+
+      // List videos endpoint (requires authentication)
+      if (url.pathname === '/api/videos' && request.method === 'GET') {
+        return withCors(await handleVideos(request), request);
       }
 
       // 404 for unknown routes
