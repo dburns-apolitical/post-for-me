@@ -211,10 +211,35 @@ export async function handlePostReel(request: Request): Promise<Response> {
             accountId,
         });
 
-        // Step 1: Select and download prioritized video from GCS (newest unused first)
-        logger.info('Step 1: Selecting prioritized video from storage');
+        // Step 1: Select video - use videoTitle if provided, otherwise prioritized selection
+        logger.info('Step 1: Selecting video from storage');
         const postedVideos = await db.getPostedVideoTitles(accountId);
-        const { videoFile, localPath } = await videoSelector.getPrioritizedVideo(postedVideos);
+
+        let videoFile;
+        let localPath;
+        const requestedTitle = validation.data.videoTitle;
+
+        if (requestedTitle) {
+            logger.info('Attempting to find requested video', { videoTitle: requestedTitle });
+            const foundVideo = await videoSelector.findVideoByTitle(requestedTitle);
+
+            if (foundVideo) {
+                videoFile = foundVideo;
+                localPath = await videoSelector.downloadVideo(foundVideo);
+                logger.info('Using requested video', { videoName: videoFile.name });
+            } else {
+                logger.info('Requested video not found, falling back to prioritized selection', {
+                    videoTitle: requestedTitle
+                });
+                const result = await videoSelector.getPrioritizedVideo(postedVideos);
+                videoFile = result.videoFile;
+                localPath = result.localPath;
+            }
+        } else {
+            const result = await videoSelector.getPrioritizedVideo(postedVideos);
+            videoFile = result.videoFile;
+            localPath = result.localPath;
+        }
 
         logger.info('Video selected', {
             videoName: videoFile.name,
