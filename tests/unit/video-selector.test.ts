@@ -101,6 +101,83 @@ describe('VideoSelectorService', () => {
     });
   });
 
+  describe('deleteEditedVideo', () => {
+    test('should call DELETE on the correct GCS API URL', async () => {
+      const service = new VideoSelectorService();
+
+      const originalFetch = global.fetch;
+      const mockFetchFn = mock(() => Promise.resolve({
+        ok: true,
+        status: 204,
+      }) as unknown as ReturnType<typeof fetch>);
+      global.fetch = mockFetchFn;
+
+      try {
+        await service.deleteEditedVideo('https://storage.googleapis.com/molars-reels/edited/test-video.mp4');
+
+        expect(mockFetchFn).toHaveBeenCalledTimes(1);
+        const [url, options] = mockFetchFn.mock.calls[0];
+        expect(url).toBe('https://storage.googleapis.com/storage/v1/b/molars-reels/o/edited%2Ftest-video.mp4');
+        expect(options).toEqual({ method: 'DELETE' });
+      } finally {
+        global.fetch = originalFetch;
+      }
+    });
+
+    test('should handle 404 gracefully (already deleted)', async () => {
+      const service = new VideoSelectorService();
+
+      const originalFetch = global.fetch;
+      global.fetch = mock(() => Promise.resolve({
+        ok: false,
+        status: 404,
+      }) as unknown as typeof fetch);
+
+      try {
+        // Should not throw
+        await service.deleteEditedVideo('https://storage.googleapis.com/molars-reels/edited/missing.mp4');
+      } finally {
+        global.fetch = originalFetch;
+      }
+    });
+
+    test('should handle mismatched URL gracefully', async () => {
+      const service = new VideoSelectorService();
+
+      const originalFetch = global.fetch;
+      const mockFetchFn = mock(() => Promise.resolve({
+        ok: true,
+      }) as unknown as ReturnType<typeof fetch>);
+      global.fetch = mockFetchFn;
+
+      try {
+        await service.deleteEditedVideo('https://example.com/some-other-bucket/video.mp4');
+        // Should not have called fetch since URL doesn't match bucket
+        expect(mockFetchFn).not.toHaveBeenCalled();
+      } finally {
+        global.fetch = originalFetch;
+      }
+    });
+
+    test('should handle API errors gracefully without throwing', async () => {
+      const service = new VideoSelectorService();
+
+      const originalFetch = global.fetch;
+      global.fetch = mock(() => Promise.resolve({
+        ok: false,
+        status: 500,
+        text: () => Promise.resolve('Internal Server Error'),
+      }) as unknown as typeof fetch);
+
+      try {
+        // Should not throw - errors are caught and logged
+        await service.deleteEditedVideo('https://storage.googleapis.com/molars-reels/edited/test.mp4');
+      } finally {
+        global.fetch = originalFetch;
+      }
+    });
+  });
+
   describe('listAllVideoNames', () => {
     test('should return array of video filenames', async () => {
       const service = new VideoSelectorService();

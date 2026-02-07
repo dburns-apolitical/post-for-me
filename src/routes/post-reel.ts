@@ -24,6 +24,7 @@ async function processPostInBackground(
     userName?: string
 ): Promise<void> {
     let editedVideoPath: string | null = null;
+    let editedVideoUrl: string | null = null;
     const videoSelector = new VideoSelectorService();
     const videoEditor = new VideoEditorService();
     const instagramClient = new InstagramClientService();
@@ -52,15 +53,15 @@ async function processPostInBackground(
 
         // Step 5: Upload edited video to GCS
         logger.info('Step 5: Uploading edited video to GCS', { postId });
-        const videoUrl = await videoSelector.uploadEditedVideo(editedVideoPath);
+        editedVideoUrl = await videoSelector.uploadEditedVideo(editedVideoPath);
 
-        logger.info('Edited video uploaded', { postId, videoUrl });
+        logger.info('Edited video uploaded', { postId, videoUrl: editedVideoUrl });
 
         // Step 6: Post to Instagram
         logger.info('Step 6: Posting Reel to Instagram', { postId });
         const instagramPost = await instagramClient.postReel(
             accountId,
-            videoUrl,
+            editedVideoUrl,
             caption,
             hashtags,
             shareToFeed
@@ -91,10 +92,11 @@ async function processPostInBackground(
             }
         }
 
-        // Step 8: Cleanup temporary files
+        // Step 8: Cleanup temporary files and GCS edited video
         logger.info('Step 8: Cleaning up temporary files', { postId });
         videoSelector.cleanupTempFile(inputVideoPath);
         videoEditor.cleanupTempFile(editedVideoPath);
+        await videoSelector.deleteEditedVideo(editedVideoUrl);
 
         logger.info('Post processing completed successfully', { postId });
     } catch (error) {
@@ -128,6 +130,11 @@ async function processPostInBackground(
             } catch (cleanupError) {
                 logger.warn('Failed to cleanup edited video on error', { postId, editedVideoPath });
             }
+        }
+
+        // Cleanup GCS edited video on error (if it was uploaded)
+        if (editedVideoUrl) {
+            await videoSelector.deleteEditedVideo(editedVideoUrl);
         }
     }
 }

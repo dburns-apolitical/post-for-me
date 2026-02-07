@@ -255,6 +255,44 @@ export class VideoSelectorService {
     }
 
     /**
+     * Delete an edited video from GCS by its public URL
+     * Called after Instagram has successfully fetched the video
+     */
+    async deleteEditedVideo(publicUrl: string): Promise<void> {
+        try {
+            // Extract the object path from the public URL
+            // URL format: https://storage.googleapis.com/{bucketName}/{objectPath}
+            const prefix = `https://storage.googleapis.com/${this.bucketName}/`;
+            if (!publicUrl.startsWith(prefix)) {
+                logger.warn('Cannot delete GCS file: URL does not match expected bucket', { publicUrl });
+                return;
+            }
+
+            const objectPath = publicUrl.slice(prefix.length);
+            const deleteUrl = `https://storage.googleapis.com/storage/v1/b/${this.bucketName}/o/${encodeURIComponent(objectPath)}`;
+
+            const response = await fetch(deleteUrl, { method: 'DELETE' });
+
+            if (response.status === 404) {
+                logger.debug('Edited video already deleted from GCS', { objectPath });
+                return;
+            }
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`GCS delete failed: ${response.status} ${errorText}`);
+            }
+
+            logger.info('Deleted edited video from GCS', { objectPath, publicUrl });
+        } catch (error) {
+            logger.warn('Failed to delete edited video from GCS', {
+                error: error instanceof Error ? error.message : 'Unknown error',
+                publicUrl,
+            });
+        }
+    }
+
+    /**
      * Upload an edited video to GCS (in edited/ folder) and return the public URL
      * Uses streaming to avoid loading the entire file into memory
      * Videos in edited/ folder won't be picked up by listVideos()
