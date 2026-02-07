@@ -105,6 +105,21 @@ export class DatabaseService {
             ON CONFLICT (id) DO NOTHING
         `;
 
+        await this.sql`
+            CREATE TABLE IF NOT EXISTS user_posts (
+                id SERIAL PRIMARY KEY,
+                post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+                user_id UUID NOT NULL,
+                user_name TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(post_id)
+            )
+        `;
+
+        await this.sql`
+            CREATE INDEX IF NOT EXISTS idx_user_posts_user_id ON user_posts(user_id)
+        `;
+
         // Add instagram_post_id column if it doesn't exist (migration for existing tables)
         await this.sql`
             DO $$
