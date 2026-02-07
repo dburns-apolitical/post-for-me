@@ -19,7 +19,9 @@ async function processPostInBackground(
     caption: string,
     hashtags: string[],
     shareToFeed: boolean,
-    db: DatabaseService
+    db: DatabaseService,
+    userId?: string,
+    userName?: string
 ): Promise<void> {
     let editedVideoPath: string | null = null;
     const videoSelector = new VideoSelectorService();
@@ -73,6 +75,21 @@ async function processPostInBackground(
         // Step 7: Update post status to success with Instagram post ID
         logger.info('Step 7: Updating post status to success', { postId });
         await db.markPostSuccess(postId, instagramPost.id);
+
+        // Step 7b: Create user_posts entry if user info available
+        if (userId && userName) {
+            try {
+                logger.info('Creating user_posts entry', { postId, userId, userName });
+                await db.createUserPost(postId, userId, userName);
+            } catch (userPostError) {
+                logger.warn('Failed to create user_posts entry', {
+                    postId,
+                    userId,
+                    userName,
+                    error: userPostError instanceof Error ? userPostError.message : 'Unknown error',
+                });
+            }
+        }
 
         // Step 8: Cleanup temporary files
         logger.info('Step 8: Cleaning up temporary files', { postId });
@@ -295,7 +312,9 @@ export async function handlePostReel(request: Request): Promise<Response> {
                 caption,
                 hashtags,
                 shareToFeed || false,
-                db
+                db,
+                authResult.userId,
+                authResult.userName
             ).catch((err) => {
                 // This catch is a safety net - errors should be handled inside processPostInBackground
                 logger.error('Unhandled error in background processing', {
