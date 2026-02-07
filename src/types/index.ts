@@ -175,4 +175,16 @@ export interface DashboardStats {
     topHooks: RankedItem[];
     topHashtagCombinations: RankedItem[];
     topVideos: RankedItem[];
+    userLeaderboard: UserLeaderboardEntry[];
+    userViewsPerVideo: UserViewsEntry[];
+}
+
+export interface UserLeaderboardEntry {
+    name: string;
+    posts: number;
+}
+
+export interface UserViewsEntry {
+    name: string;
+    viewsPerVideo: number;
 }
