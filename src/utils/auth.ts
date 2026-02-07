@@ -83,6 +83,7 @@ export async function validateAuth(request: Request): Promise<AuthResult> {
                 isAdmin,
                 method: 'bearer',
                 userId: result.userId,
+                userName: result.userName,
             };
         }
 
@@ -103,6 +104,7 @@ export async function validateAuth(request: Request): Promise<AuthResult> {
 interface TokenValidationResult {
     valid: boolean;
     userId?: string;
+    userName?: string;
     error?: string;
 }
 
@@ -153,7 +155,7 @@ async function validateBearerToken(token: string): Promise<TokenValidationResult
             iat: payload.iat,
         });
 
-        return { valid: true, userId: payload.sub };
+        return { valid: true, userId: payload.sub, userName: payload.name as string | undefined };
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
@@ -205,7 +207,7 @@ function validateTokenBasic(token: string): TokenValidationResult {
         }
 
         logger.warn('JWT validated without cryptographic verification. Configure NEON_JWKS_URL for secure validation.');
-        return { valid: true, userId: payload.sub };
+        return { valid: true, userId: payload.sub, userName: payload.name };
     } catch (error) {
         logger.debug('Failed to decode JWT', {
             error: error instanceof Error ? error.message : 'Unknown error',
