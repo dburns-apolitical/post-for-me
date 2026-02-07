@@ -8,6 +8,8 @@ import type {
     RankedItem,
     ViewsMetrics,
     PostStatus,
+    UserLeaderboardEntry,
+    UserViewsEntry,
 } from '../types/index.js';
 
 export async function handleStats(request: Request): Promise<Response> {
@@ -51,6 +53,8 @@ export async function handleStats(request: Request): Promise<Response> {
             topHooksResult,
             topHashtagCombinationsResult,
             topVideosResult,
+            userLeaderboardResult,
+            userViewsPerVideoResult,
         ] = await Promise.all([
             getTopPosts(sql, accountId),
             getMostRecentPost(sql, accountId),
@@ -59,6 +63,8 @@ export async function handleStats(request: Request): Promise<Response> {
             getTopHooks(sql, accountId),
             getTopHashtagCombinations(sql, accountId),
             getTopVideos(sql, accountId),
+            getUserLeaderboard(sql, accountId),
+            getUserViewsPerVideo(sql, accountId),
         ]);
 
         const stats: DashboardStats = {
@@ -69,6 +75,8 @@ export async function handleStats(request: Request): Promise<Response> {
             topHooks: topHooksResult,
             topHashtagCombinations: topHashtagCombinationsResult,
             topVideos: topVideosResult,
+            userLeaderboard: userLeaderboardResult,
+            userViewsPerVideo: userViewsPerVideoResult,
         };
 
         return Response.json({
@@ -372,6 +380,60 @@ async function getTopVideos(sql: NeonSQL, accountId: number | null): Promise<Ran
         ` as RawRankedRow[];
 
     return rows.map(mapRankedRow);
+}
+
+/**
+ * Get user leaderboard - posts per user
+ */
+async function getUserLeaderboard(sql: NeonSQL, accountId: number | null): Promise<UserLeaderboardEntry[]> {
+    const rows = accountId !== null
+        ? await sql`
+            SELECT up.user_name as name, COUNT(*) as posts
+            FROM user_posts up
+            JOIN posts p ON up.post_id = p.id
+            WHERE p.account_id = ${accountId}
+            GROUP BY up.user_name
+            ORDER BY posts DESC
+        ` as { name: string; posts: string }[]
+        : await sql`
+            SELECT up.user_name as name, COUNT(*) as posts
+            FROM user_posts up
+            GROUP BY up.user_name
+            ORDER BY posts DESC
+        ` as { name: string; posts: string }[];
+
+    return rows.map(row => ({
+        name: row.name,
+        posts: parseInt(row.posts, 10),
+    }));
+}
+
+/**
+ * Get user views per video - average views per user's posts
+ */
+async function getUserViewsPerVideo(sql: NeonSQL, accountId: number | null): Promise<UserViewsEntry[]> {
+    const rows = accountId !== null
+        ? await sql`
+            SELECT up.user_name as name, ROUND(AVG(p.views)) as views_per_video
+            FROM user_posts up
+            JOIN posts p ON up.post_id = p.id
+            WHERE p.views IS NOT NULL AND p.account_id = ${accountId}
+            GROUP BY up.user_name
+            ORDER BY views_per_video DESC
+        ` as { name: string; views_per_video: string }[]
+        : await sql`
+            SELECT up.user_name as name, ROUND(AVG(p.views)) as views_per_video
+            FROM user_posts up
+            JOIN posts p ON up.post_id = p.id
+            WHERE p.views IS NOT NULL
+            GROUP BY up.user_name
+            ORDER BY views_per_video DESC
+        ` as { name: string; views_per_video: string }[];
+
+    return rows.map(row => ({
+        name: row.name,
+        viewsPerVideo: parseInt(row.views_per_video, 10) || 0,
+    }));
 }
 
 // Raw row types from database queries
