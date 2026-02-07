@@ -519,4 +519,15 @@ export class DatabaseService {
         ` as DbHook[];
         return result;
     }
+
+    /**
+     * Create a user_posts entry linking a post to the user who created it
+     */
+    async createUserPost(postId: number, userId: string, userName: string): Promise<void> {
+        await this.sql`
+            INSERT INTO user_posts (post_id, user_id, user_name)
+            VALUES (${postId}, ${userId}, ${userName})
+        `;
+        logger.debug('User post record created', { postId, userId, userName });
+    }
 }

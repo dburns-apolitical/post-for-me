@@ -350,4 +350,14 @@ describe('DatabaseService', () => {
             expect(result).toEqual([]);
         });
     });
+
+    describe('createUserPost', () => {
+        test('should insert user_post record', async () => {
+            mockSql.mockResolvedValueOnce([]);
+
+            await expect(
+                db.createUserPost(1, '70668aac-f6e0-4b40-b1f7-b7b4e0a72613', 'Molars')
+            ).resolves.toBeUndefined();
+        });
+    });
 });
