@@ -8,6 +8,7 @@ export interface AuthResult {
     isAdmin: boolean;
     method?: 'password' | 'bearer';
     userId?: string;
+    userName?: string;
     error?: string;
 }
 
