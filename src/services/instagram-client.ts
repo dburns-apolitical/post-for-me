@@ -288,7 +288,7 @@ export class InstagramClientService {
         const { accessToken } = this.getCredentials(accountId);
         try {
             const params = new URLSearchParams({
-                metric: 'ig_reels_aggregated_all_plays_count',
+                metric: 'views',
                 access_token: accessToken,
             });
 
@@ -315,7 +315,7 @@ export class InstagramClientService {
             }
 
             const viewsMetric = data.data.find(
-                (metric) => metric.name === 'ig_reels_aggregated_all_plays_count'
+                (metric) => metric.name === 'views'
             );
 
             if (!viewsMetric || !viewsMetric.values || viewsMetric.values.length === 0) {

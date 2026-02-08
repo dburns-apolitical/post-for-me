@@ -7,6 +7,7 @@ import { handleStats } from './routes/stats.js';
 import { handleCaptions } from './routes/captions.js';
 import { handleHooks } from './routes/hooks.js';
 import { handleVideos } from './routes/videos.js';
+import { handleSyncViews } from './routes/sync-views.js';
 import { DatabaseService } from './services/database.js';
 import { ViewsSyncCronService } from './services/views-sync-cron.js';
 import * as fs from 'fs';
@@ -217,6 +218,11 @@ startup().then(() => {
       // List videos endpoint (requires authentication)
       if (url.pathname === '/api/videos' && request.method === 'GET') {
         return withCors(await handleVideos(request), request);
+      }
+
+      // Manual views sync endpoint (requires admin authentication)
+      if (url.pathname === '/api/sync-views' && request.method === 'POST') {
+        return withCors(await handleSyncViews(request, viewsSyncCron), request);
       }
 
       // 404 for unknown routes
