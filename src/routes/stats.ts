@@ -197,24 +197,24 @@ async function getViewsMetrics(sql: NeonSQL, accountId: number | null): Promise<
     const result = accountId !== null
         ? await sql`
             SELECT
-                COALESCE(AVG(views), 0) as all_time_avg,
-                COALESCE(AVG(CASE WHEN created_at >= NOW() - INTERVAL '28 days' THEN views END), 0) as last_28_avg,
-                COALESCE(AVG(CASE WHEN created_at >= NOW() - INTERVAL '56 days' AND created_at < NOW() - INTERVAL '28 days' THEN views END), 0) as prev_28_avg
+                COALESCE(SUM(views), 0) as all_time_total,
+                COALESCE(SUM(CASE WHEN created_at >= NOW() - INTERVAL '28 days' THEN views END), 0) as last_28_total,
+                COALESCE(SUM(CASE WHEN created_at >= NOW() - INTERVAL '56 days' AND created_at < NOW() - INTERVAL '28 days' THEN views END), 0) as prev_28_total
             FROM posts
             WHERE views IS NOT NULL AND account_id = ${accountId}
-        ` as { all_time_avg: string; last_28_avg: string; prev_28_avg: string }[]
+        ` as { all_time_total: string; last_28_total: string; prev_28_total: string }[]
         : await sql`
             SELECT
-                COALESCE(AVG(views), 0) as all_time_avg,
-                COALESCE(AVG(CASE WHEN created_at >= NOW() - INTERVAL '28 days' THEN views END), 0) as last_28_avg,
-                COALESCE(AVG(CASE WHEN created_at >= NOW() - INTERVAL '56 days' AND created_at < NOW() - INTERVAL '28 days' THEN views END), 0) as prev_28_avg
+                COALESCE(SUM(views), 0) as all_time_total,
+                COALESCE(SUM(CASE WHEN created_at >= NOW() - INTERVAL '28 days' THEN views END), 0) as last_28_total,
+                COALESCE(SUM(CASE WHEN created_at >= NOW() - INTERVAL '56 days' AND created_at < NOW() - INTERVAL '28 days' THEN views END), 0) as prev_28_total
             FROM posts
             WHERE views IS NOT NULL
-        ` as { all_time_avg: string; last_28_avg: string; prev_28_avg: string }[];
+        ` as { all_time_total: string; last_28_total: string; prev_28_total: string }[];
 
-    const allTime = parseFloat(result[0].all_time_avg) || 0;
-    const last28Days = parseFloat(result[0].last_28_avg) || 0;
-    const previous28Days = parseFloat(result[0].prev_28_avg) || 0;
+    const allTime = parseFloat(result[0].all_time_total) || 0;
+    const last28Days = parseFloat(result[0].last_28_total) || 0;
+    const previous28Days = parseFloat(result[0].prev_28_total) || 0;
 
     // Calculate delta percentage
     let deltaPercent: number | null = null;
