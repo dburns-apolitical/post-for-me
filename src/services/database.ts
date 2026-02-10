@@ -398,7 +398,7 @@ export class DatabaseService {
             WHERE status = 'success'
               AND views IS NULL
               AND instagram_post_id IS NOT NULL
-              AND created_at <= NOW() - INTERVAL '5 days'
+              AND created_at <= NOW() - INTERVAL '2 days'
         ` as DbPost[];
         return result;
     }
