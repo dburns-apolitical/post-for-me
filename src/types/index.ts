@@ -167,10 +167,17 @@ export interface ViewsMetrics {
     deltaPercent: number | null;
 }
 
+export interface PostCountMetrics {
+    allTime: number;
+    last28Days: number;
+    last7Days: number;
+}
+
 export interface DashboardStats {
     topPosts: PostWithDetails[];
     mostRecentPost: PostWithDetails | null;
     viewsMetrics: ViewsMetrics;
+    postCountMetrics: PostCountMetrics;
     topCaptions: RankedItem[];
     topHooks: RankedItem[];
     topHashtagCombinations: RankedItem[];

@@ -7,6 +7,7 @@ import type {
     PostWithDetails,
     RankedItem,
     ViewsMetrics,
+    PostCountMetrics,
     PostStatus,
     UserLeaderboardEntry,
     UserViewsEntry,
@@ -49,6 +50,7 @@ export async function handleStats(request: Request): Promise<Response> {
             topPostsResult,
             mostRecentPostResult,
             viewsMetricsResult,
+            postCountMetricsResult,
             topCaptionsResult,
             topHooksResult,
             topHashtagCombinationsResult,
@@ -59,6 +61,7 @@ export async function handleStats(request: Request): Promise<Response> {
             getTopPosts(sql, accountId),
             getMostRecentPost(sql, accountId),
             getViewsMetrics(sql, accountId),
+            getPostCountMetrics(sql, accountId),
             getTopCaptions(sql, accountId),
             getTopHooks(sql, accountId),
             getTopHashtagCombinations(sql, accountId),
@@ -71,6 +74,7 @@ export async function handleStats(request: Request): Promise<Response> {
             topPosts: topPostsResult,
             mostRecentPost: mostRecentPostResult,
             viewsMetrics: viewsMetricsResult,
+            postCountMetrics: postCountMetricsResult,
             topCaptions: topCaptionsResult,
             topHooks: topHooksResult,
             topHashtagCombinations: topHashtagCombinationsResult,
@@ -227,6 +231,34 @@ async function getViewsMetrics(sql: NeonSQL, accountId: number | null): Promise<
         last28Days: Math.round(last28Days),
         previous28Days: Math.round(previous28Days),
         deltaPercent: deltaPercent !== null ? Math.round(deltaPercent * 100) / 100 : null,
+    };
+}
+
+/**
+ * Get post count metrics (all time, last 28 days, last 7 days)
+ */
+async function getPostCountMetrics(sql: NeonSQL, accountId: number | null): Promise<PostCountMetrics> {
+    const result = accountId !== null
+        ? await sql`
+            SELECT
+                COUNT(*) as all_time_total,
+                COUNT(CASE WHEN created_at >= NOW() - INTERVAL '28 days' THEN 1 END) as last_28_total,
+                COUNT(CASE WHEN created_at >= NOW() - INTERVAL '7 days' THEN 1 END) as last_7_total
+            FROM posts
+            WHERE account_id = ${accountId}
+        ` as { all_time_total: string; last_28_total: string; last_7_total: string }[]
+        : await sql`
+            SELECT
+                COUNT(*) as all_time_total,
+                COUNT(CASE WHEN created_at >= NOW() - INTERVAL '28 days' THEN 1 END) as last_28_total,
+                COUNT(CASE WHEN created_at >= NOW() - INTERVAL '7 days' THEN 1 END) as last_7_total
+            FROM posts
+        ` as { all_time_total: string; last_28_total: string; last_7_total: string }[];
+
+    return {
+        allTime: parseInt(result[0].all_time_total, 10) || 0,
+        last28Days: parseInt(result[0].last_28_total, 10) || 0,
+        last7Days: parseInt(result[0].last_7_total, 10) || 0,
     };
 }
 
