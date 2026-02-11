@@ -328,10 +328,17 @@ export class VideoEditorService {
             fontSize -= 4;
         }
 
-        // Fallback: use minimum font size with max lines
+        // Fallback: use minimum font size, keep all lines (never truncate text)
         const avgCharWidth = minFontSize * charWidthRatio;
         const charsPerLine = Math.floor(usableWidth / avgCharWidth);
-        const lines = this.wrapText(text, charsPerLine).slice(0, maxLines);
+        const lines = this.wrapText(text, charsPerLine);
+
+        logger.warn('Text could not fit within maxLines, using all lines at minimum font size', {
+            textLength: text.length,
+            lineCount: lines.length,
+            maxLines,
+            fontSize: minFontSize,
+        });
 
         return { lines, fontSize: minFontSize };
     }
