@@ -320,6 +320,7 @@ export class DatabaseService {
             SELECT DISTINCT v.title FROM posts p
             JOIN videos v ON p.video_id = v.id
             WHERE p.account_id = ${accountId}
+            AND p.status = 'success'
         ` as { title: string }[];
         return result.map((row) => row.title);
     }

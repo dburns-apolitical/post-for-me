@@ -140,9 +140,10 @@ export class VideoSelectorService {
                 totalVideos: videos.length,
             });
         } else {
-            // All videos have been posted, fall back to newest overall
-            selectedVideo = sortedVideos[0];
-            logger.info('All videos posted, selected newest video', {
+            // All videos have been posted, select randomly
+            const randomIndex = Math.floor(Math.random() * sortedVideos.length);
+            selectedVideo = sortedVideos[randomIndex];
+            logger.info('All videos posted, selected random video', {
                 video: selectedVideo.name,
                 createdAt: selectedVideo.createdAt.toISOString(),
                 totalVideos: videos.length,
