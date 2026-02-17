@@ -8,14 +8,17 @@ import { handleCaptions } from './routes/captions.js';
 import { handleHooks } from './routes/hooks.js';
 import { handleVideos } from './routes/videos.js';
 import { handleSyncViews } from './routes/sync-views.js';
+import { handleRunEvaluation } from './routes/run-evaluation.js';
 import { DatabaseService } from './services/database.js';
 import { ViewsSyncCronService } from './services/views-sync-cron.js';
+import { AgentEvalCronService } from './services/agent-eval-cron.js';
 import * as fs from 'fs';
 import * as path from 'path';
 
 const config = getConfig();
 const db = new DatabaseService();
 const viewsSyncCron = new ViewsSyncCronService();
+const agentEvalCron = new AgentEvalCronService();
 
 /**
  * Clear all files in the tmp directory
@@ -95,6 +98,9 @@ async function startup(): Promise<void> {
   // Start the views sync cron job
   viewsSyncCron.start();
 
+  // Start the weekly agent evaluation cron job
+  agentEvalCron.start();
+
   logger.info('Server initialization complete');
 }
 
@@ -106,6 +112,9 @@ async function shutdown(signal: string): Promise<void> {
 
   // Stop the views sync cron job
   viewsSyncCron.stop();
+
+  // Stop the agent evaluation cron job
+  agentEvalCron.stop();
 
   // Mark any in-progress posts as failed
   try {
@@ -223,6 +232,11 @@ startup().then(() => {
       // Manual views sync endpoint (requires admin authentication)
       if (url.pathname === '/api/sync-views' && request.method === 'POST') {
         return withCors(await handleSyncViews(request, viewsSyncCron), request);
+      }
+
+      // Agent evaluation endpoint (requires admin authentication)
+      if (url.pathname === '/api/run-evaluation' && request.method === 'POST') {
+        return withCors(await handleRunEvaluation(request), request);
       }
 
       // 404 for unknown routes
