@@ -11,6 +11,7 @@ import type {
     DbVideo,
     DbPost,
     PostWithDetails,
+    AgentEvaluation,
 } from '../types/index.js';
 
 export class DatabaseService {
@@ -157,6 +158,18 @@ export class DatabaseService {
 
         await this.sql`
             CREATE INDEX IF NOT EXISTS idx_posts_account_id ON posts(account_id)
+        `;
+
+        await this.sql`
+            CREATE TABLE IF NOT EXISTS agent_evaluations (
+                id SERIAL PRIMARY KEY,
+                response TEXT NOT NULL,
+                model TEXT NOT NULL,
+                input_tokens INTEGER,
+                output_tokens INTEGER,
+                triggered_by TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
         `;
 
         logger.info('Database schema initialized');
@@ -530,5 +543,171 @@ export class DatabaseService {
             VALUES (${postId}, ${userId}, ${userName})
         `;
         logger.debug('User post record created', { postId, userId, userName });
+    }
+
+    async insertEvaluation(
+        response: string,
+        model: string,
+        inputTokens: number | null,
+        outputTokens: number | null,
+        triggeredBy: string
+    ): Promise<AgentEvaluation> {
+        const result = await this.sql`
+            INSERT INTO agent_evaluations (response, model, input_tokens, output_tokens, triggered_by)
+            VALUES (${response}, ${model}, ${inputTokens}, ${outputTokens}, ${triggeredBy})
+            RETURNING id, response, model, input_tokens, output_tokens, triggered_by, created_at
+        ` as AgentEvaluation[];
+        return result[0];
+    }
+
+    async getRecentEvaluations(limit: number = 10): Promise<AgentEvaluation[]> {
+        const result = await this.sql`
+            SELECT id, response, model, input_tokens, output_tokens, triggered_by, created_at
+            FROM agent_evaluations
+            ORDER BY created_at DESC
+            LIMIT ${limit}
+        ` as AgentEvaluation[];
+        return result;
+    }
+
+    async getPostsWithDetails(
+        accountId: number | null,
+        afterDate: Date | null,
+        beforeDate: Date | null
+    ): Promise<(PostWithDetails & { account_name: string })[]> {
+        let rows;
+        if (accountId !== null && afterDate !== null && beforeDate !== null) {
+            rows = await this.sql`
+                SELECT p.id, p.instagram_post_id, p.views, p.status, p.created_at, p.updated_at,
+                    v.id as video_id, v.title as video_title,
+                    h.id as hook_id, h.text as hook_text,
+                    c.id as caption_id, c.text as caption_text,
+                    a.name as account_name,
+                    COALESCE(ARRAY_AGG(ht.text ORDER BY ht.id) FILTER (WHERE ht.text IS NOT NULL), ARRAY[]::text[]) as hashtags
+                FROM posts p
+                JOIN videos v ON p.video_id = v.id
+                JOIN hooks h ON p.hook_id = h.id
+                JOIN captions c ON p.caption_id = c.id
+                JOIN accounts a ON p.account_id = a.id
+                JOIN hashtag_combinations hc ON p.hashtag_combination_id = hc.id
+                LEFT JOIN hashtags ht ON ht.id IN (hc.hashtag1_id, hc.hashtag2_id, hc.hashtag3_id, hc.hashtag4_id, hc.hashtag5_id)
+                WHERE p.status = 'success' AND p.account_id = ${accountId}
+                  AND p.created_at >= ${afterDate.toISOString()} AND p.created_at < ${beforeDate.toISOString()}
+                GROUP BY p.id, v.id, v.title, h.id, h.text, c.id, c.text, a.name
+                ORDER BY p.created_at DESC
+            `;
+        } else if (accountId !== null && afterDate !== null) {
+            rows = await this.sql`
+                SELECT p.id, p.instagram_post_id, p.views, p.status, p.created_at, p.updated_at,
+                    v.id as video_id, v.title as video_title,
+                    h.id as hook_id, h.text as hook_text,
+                    c.id as caption_id, c.text as caption_text,
+                    a.name as account_name,
+                    COALESCE(ARRAY_AGG(ht.text ORDER BY ht.id) FILTER (WHERE ht.text IS NOT NULL), ARRAY[]::text[]) as hashtags
+                FROM posts p
+                JOIN videos v ON p.video_id = v.id
+                JOIN hooks h ON p.hook_id = h.id
+                JOIN captions c ON p.caption_id = c.id
+                JOIN accounts a ON p.account_id = a.id
+                JOIN hashtag_combinations hc ON p.hashtag_combination_id = hc.id
+                LEFT JOIN hashtags ht ON ht.id IN (hc.hashtag1_id, hc.hashtag2_id, hc.hashtag3_id, hc.hashtag4_id, hc.hashtag5_id)
+                WHERE p.status = 'success' AND p.account_id = ${accountId}
+                  AND p.created_at >= ${afterDate.toISOString()}
+                GROUP BY p.id, v.id, v.title, h.id, h.text, c.id, c.text, a.name
+                ORDER BY p.created_at DESC
+            `;
+        } else if (afterDate !== null && beforeDate !== null) {
+            rows = await this.sql`
+                SELECT p.id, p.instagram_post_id, p.views, p.status, p.created_at, p.updated_at,
+                    v.id as video_id, v.title as video_title,
+                    h.id as hook_id, h.text as hook_text,
+                    c.id as caption_id, c.text as caption_text,
+                    a.name as account_name,
+                    COALESCE(ARRAY_AGG(ht.text ORDER BY ht.id) FILTER (WHERE ht.text IS NOT NULL), ARRAY[]::text[]) as hashtags
+                FROM posts p
+                JOIN videos v ON p.video_id = v.id
+                JOIN hooks h ON p.hook_id = h.id
+                JOIN captions c ON p.caption_id = c.id
+                JOIN accounts a ON p.account_id = a.id
+                JOIN hashtag_combinations hc ON p.hashtag_combination_id = hc.id
+                LEFT JOIN hashtags ht ON ht.id IN (hc.hashtag1_id, hc.hashtag2_id, hc.hashtag3_id, hc.hashtag4_id, hc.hashtag5_id)
+                WHERE p.status = 'success'
+                  AND p.created_at >= ${afterDate.toISOString()} AND p.created_at < ${beforeDate.toISOString()}
+                GROUP BY p.id, v.id, v.title, h.id, h.text, c.id, c.text, a.name
+                ORDER BY p.created_at DESC
+            `;
+        } else if (afterDate !== null) {
+            rows = await this.sql`
+                SELECT p.id, p.instagram_post_id, p.views, p.status, p.created_at, p.updated_at,
+                    v.id as video_id, v.title as video_title,
+                    h.id as hook_id, h.text as hook_text,
+                    c.id as caption_id, c.text as caption_text,
+                    a.name as account_name,
+                    COALESCE(ARRAY_AGG(ht.text ORDER BY ht.id) FILTER (WHERE ht.text IS NOT NULL), ARRAY[]::text[]) as hashtags
+                FROM posts p
+                JOIN videos v ON p.video_id = v.id
+                JOIN hooks h ON p.hook_id = h.id
+                JOIN captions c ON p.caption_id = c.id
+                JOIN accounts a ON p.account_id = a.id
+                JOIN hashtag_combinations hc ON p.hashtag_combination_id = hc.id
+                LEFT JOIN hashtags ht ON ht.id IN (hc.hashtag1_id, hc.hashtag2_id, hc.hashtag3_id, hc.hashtag4_id, hc.hashtag5_id)
+                WHERE p.status = 'success'
+                  AND p.created_at >= ${afterDate.toISOString()}
+                GROUP BY p.id, v.id, v.title, h.id, h.text, c.id, c.text, a.name
+                ORDER BY p.created_at DESC
+            `;
+        } else if (accountId !== null) {
+            rows = await this.sql`
+                SELECT p.id, p.instagram_post_id, p.views, p.status, p.created_at, p.updated_at,
+                    v.id as video_id, v.title as video_title,
+                    h.id as hook_id, h.text as hook_text,
+                    c.id as caption_id, c.text as caption_text,
+                    a.name as account_name,
+                    COALESCE(ARRAY_AGG(ht.text ORDER BY ht.id) FILTER (WHERE ht.text IS NOT NULL), ARRAY[]::text[]) as hashtags
+                FROM posts p
+                JOIN videos v ON p.video_id = v.id
+                JOIN hooks h ON p.hook_id = h.id
+                JOIN captions c ON p.caption_id = c.id
+                JOIN accounts a ON p.account_id = a.id
+                JOIN hashtag_combinations hc ON p.hashtag_combination_id = hc.id
+                LEFT JOIN hashtags ht ON ht.id IN (hc.hashtag1_id, hc.hashtag2_id, hc.hashtag3_id, hc.hashtag4_id, hc.hashtag5_id)
+                WHERE p.status = 'success' AND p.account_id = ${accountId}
+                GROUP BY p.id, v.id, v.title, h.id, h.text, c.id, c.text, a.name
+                ORDER BY p.created_at DESC
+            `;
+        } else {
+            rows = await this.sql`
+                SELECT p.id, p.instagram_post_id, p.views, p.status, p.created_at, p.updated_at,
+                    v.id as video_id, v.title as video_title,
+                    h.id as hook_id, h.text as hook_text,
+                    c.id as caption_id, c.text as caption_text,
+                    a.name as account_name,
+                    COALESCE(ARRAY_AGG(ht.text ORDER BY ht.id) FILTER (WHERE ht.text IS NOT NULL), ARRAY[]::text[]) as hashtags
+                FROM posts p
+                JOIN videos v ON p.video_id = v.id
+                JOIN hooks h ON p.hook_id = h.id
+                JOIN captions c ON p.caption_id = c.id
+                JOIN accounts a ON p.account_id = a.id
+                JOIN hashtag_combinations hc ON p.hashtag_combination_id = hc.id
+                LEFT JOIN hashtags ht ON ht.id IN (hc.hashtag1_id, hc.hashtag2_id, hc.hashtag3_id, hc.hashtag4_id, hc.hashtag5_id)
+                WHERE p.status = 'success'
+                GROUP BY p.id, v.id, v.title, h.id, h.text, c.id, c.text, a.name
+                ORDER BY p.created_at DESC
+            `;
+        }
+
+        return (rows as any[]).map((row: any) => ({
+            id: row.id,
+            instagram_post_id: row.instagram_post_id,
+            views: row.views,
+            status: row.status,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            video: { id: row.video_id, title: row.video_title },
+            hook: { id: row.hook_id, text: row.hook_text },
+            caption: { id: row.caption_id, text: row.caption_text },
+            hashtags: row.hashtags || [],
+            account_name: row.account_name,
+        }));
     }
 }

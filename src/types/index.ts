@@ -198,3 +198,13 @@ export interface UserViewsEntry {
     name: string;
     viewsPerVideo: number;
 }
+
+export interface AgentEvaluation {
+    id: number;
+    response: string;
+    model: string;
+    input_tokens: number | null;
+    output_tokens: number | null;
+    triggered_by: string;
+    created_at: Date;
+}
