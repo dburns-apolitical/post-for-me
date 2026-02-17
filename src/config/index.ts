@@ -9,6 +9,7 @@ export function getConfig(): Config {
         'INSTAGRAM_ACCESS_TOKEN_2',
         'INSTAGRAM_USER_ID_2',
         'DATABASE_URL',
+        'ANTHROPIC_API_KEY',
     ];
 
     const missing = requiredEnvVars.filter((varName) => !process.env[varName]);
@@ -43,6 +44,9 @@ export function getConfig(): Config {
             password: process.env.DASHBOARD_PASSWORD || '',
             neonAuthUrl: process.env.NEON_AUTH_URL,
             neonJwksUrl: process.env.NEON_JWKS_URL,
+        },
+        anthropic: {
+            apiKey: process.env.ANTHROPIC_API_KEY || '',
         },
     };
 }

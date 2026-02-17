@@ -69,6 +69,9 @@ export interface Config {
         neonAuthUrl?: string;
         neonJwksUrl?: string;
     };
+    anthropic: {
+        apiKey: string;
+    };
 }
 
 // Database types
