@@ -4,8 +4,8 @@ import { handlePostReel } from './routes/post-reel.js';
 import { handlePostStatus } from './routes/post-status.js';
 import { handleTestInstagram } from './routes/test-instagram.js';
 import { handleStats } from './routes/stats.js';
-import { handleCaptions } from './routes/captions.js';
-import { handleHooks } from './routes/hooks.js';
+import { handleCaptions, handleCaptionById } from './routes/captions.js';
+import { handleHooks, handleHookById } from './routes/hooks.js';
 import { handleVideos } from './routes/videos.js';
 import { handleSyncViews } from './routes/sync-views.js';
 import { handleRunEvaluation } from './routes/run-evaluation.js';
@@ -149,7 +149,7 @@ const ALLOWED_ORIGINS = [
 function getCorsHeaders(request: Request): Record<string, string> {
   const origin = request.headers.get('Origin');
   const headers: Record<string, string> = {
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Dashboard-Password',
     'Access-Control-Max-Age': '86400',
   };
@@ -215,14 +215,26 @@ startup().then(() => {
         return withCors(await handleStats(request), request);
       }
 
-      // List captions endpoint (requires authentication)
-      if (url.pathname === '/api/captions' && request.method === 'GET') {
+      // Captions endpoint (requires authentication)
+      if (url.pathname === '/api/captions' && (request.method === 'GET' || request.method === 'POST')) {
         return withCors(await handleCaptions(request), request);
       }
 
-      // List hooks endpoint (requires authentication)
-      if (url.pathname === '/api/hooks' && request.method === 'GET') {
+      // Caption by ID endpoint (PATCH for enable/disable)
+      const captionMatch = url.pathname.match(/^\/api\/captions\/(\d+)$/);
+      if (captionMatch && request.method === 'PATCH') {
+        return withCors(await handleCaptionById(request, parseInt(captionMatch[1], 10)), request);
+      }
+
+      // Hooks endpoint (requires authentication)
+      if (url.pathname === '/api/hooks' && (request.method === 'GET' || request.method === 'POST')) {
         return withCors(await handleHooks(request), request);
+      }
+
+      // Hook by ID endpoint (PATCH for enable/disable)
+      const hookMatch = url.pathname.match(/^\/api\/hooks\/(\d+)$/);
+      if (hookMatch && request.method === 'PATCH') {
+        return withCors(await handleHookById(request, parseInt(hookMatch[1], 10)), request);
       }
 
       // List videos endpoint (requires authentication)

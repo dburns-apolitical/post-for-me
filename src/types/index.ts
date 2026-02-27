@@ -80,6 +80,7 @@ export type PostStatus = 'pending' | 'success' | 'failed';
 export interface DbCaption {
     id: number;
     text: string;
+    enabled: boolean;
     created_at: Date;
 }
 
@@ -92,6 +93,7 @@ export interface DbHashtag {
 export interface DbHook {
     id: number;
     text: string;
+    enabled: boolean;
     created_at: Date;
 }
 

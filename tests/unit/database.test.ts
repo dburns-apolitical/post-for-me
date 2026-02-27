@@ -308,8 +308,8 @@ describe('DatabaseService', () => {
     describe('getAllCaptions', () => {
         test('should return all captions ordered by created_at desc', async () => {
             const mockCaptions = [
-                { id: 2, text: 'Newer caption', created_at: new Date('2025-02-01') },
-                { id: 1, text: 'Older caption', created_at: new Date('2025-01-01') },
+                { id: 2, text: 'Newer caption', enabled: true, created_at: new Date('2025-02-01') },
+                { id: 1, text: 'Older caption', enabled: false, created_at: new Date('2025-01-01') },
             ];
             mockSql.mockResolvedValueOnce(mockCaptions);
 
@@ -326,13 +326,24 @@ describe('DatabaseService', () => {
 
             expect(result).toEqual([]);
         });
+
+        test('should filter enabled only when enabledOnly is true', async () => {
+            const mockCaptions = [
+                { id: 2, text: 'Enabled caption', enabled: true, created_at: new Date('2025-02-01') },
+            ];
+            mockSql.mockResolvedValueOnce(mockCaptions);
+
+            const result = await db.getAllCaptions(true);
+
+            expect(result).toEqual(mockCaptions);
+        });
     });
 
     describe('getAllHooks', () => {
         test('should return all hooks ordered by created_at desc', async () => {
             const mockHooks = [
-                { id: 2, text: 'Newer hook', created_at: new Date('2025-02-01') },
-                { id: 1, text: 'Older hook', created_at: new Date('2025-01-01') },
+                { id: 2, text: 'Newer hook', enabled: true, created_at: new Date('2025-02-01') },
+                { id: 1, text: 'Older hook', enabled: false, created_at: new Date('2025-01-01') },
             ];
             mockSql.mockResolvedValueOnce(mockHooks);
 
@@ -348,6 +359,119 @@ describe('DatabaseService', () => {
             const result = await db.getAllHooks();
 
             expect(result).toEqual([]);
+        });
+
+        test('should filter enabled only when enabledOnly is true', async () => {
+            const mockHooks = [
+                { id: 1, text: 'Enabled hook', enabled: true, created_at: new Date('2025-02-01') },
+            ];
+            mockSql.mockResolvedValueOnce(mockHooks);
+
+            const result = await db.getAllHooks(true);
+
+            expect(result).toEqual(mockHooks);
+        });
+    });
+
+    describe('createCaption', () => {
+        test('should create and return a caption', async () => {
+            const mockCaption = { id: 1, text: 'New caption', enabled: true, created_at: new Date() };
+            mockSql.mockResolvedValueOnce([mockCaption]);
+
+            const result = await db.createCaption('New caption');
+
+            expect(result).toEqual(mockCaption);
+        });
+
+        test('should return null on duplicate caption', async () => {
+            const error = new Error('unique constraint violation');
+            (error as any).code = '23505';
+            mockSql.mockRejectedValueOnce(error);
+
+            const result = await db.createCaption('Duplicate caption');
+
+            expect(result).toBeNull();
+        });
+
+        test('should return null when error message includes unique', async () => {
+            mockSql.mockRejectedValueOnce(new Error('unique constraint'));
+
+            const result = await db.createCaption('Duplicate caption');
+
+            expect(result).toBeNull();
+        });
+
+        test('should rethrow non-unique errors', async () => {
+            mockSql.mockRejectedValueOnce(new Error('connection failed'));
+
+            await expect(db.createCaption('Some caption')).rejects.toThrow('connection failed');
+        });
+    });
+
+    describe('createHook', () => {
+        test('should create and return a hook', async () => {
+            const mockHook = { id: 1, text: 'New hook', enabled: true, created_at: new Date() };
+            mockSql.mockResolvedValueOnce([mockHook]);
+
+            const result = await db.createHook('New hook');
+
+            expect(result).toEqual(mockHook);
+        });
+
+        test('should return null on duplicate hook', async () => {
+            const error = new Error('unique constraint violation');
+            (error as any).code = '23505';
+            mockSql.mockRejectedValueOnce(error);
+
+            const result = await db.createHook('Duplicate hook');
+
+            expect(result).toBeNull();
+        });
+
+        test('should rethrow non-unique errors', async () => {
+            mockSql.mockRejectedValueOnce(new Error('connection failed'));
+
+            await expect(db.createHook('Some hook')).rejects.toThrow('connection failed');
+        });
+    });
+
+    describe('updateCaptionEnabled', () => {
+        test('should update and return caption', async () => {
+            const mockCaption = { id: 1, text: 'Test caption', enabled: false, created_at: new Date() };
+            mockSql.mockResolvedValueOnce([mockCaption]);
+
+            const result = await db.updateCaptionEnabled(1, false);
+
+            expect(result).toEqual(mockCaption);
+            expect(result!.enabled).toBe(false);
+        });
+
+        test('should return null when caption not found', async () => {
+            mockSql.mockResolvedValueOnce([]);
+
+            const result = await db.updateCaptionEnabled(999, false);
+
+            expect(result).toBeNull();
+        });
+    });
+
+    describe('updateHookEnabled', () => {
+        test('should update and return hook', async () => {
+            const mockHook = { id: 1, text: 'Test hook', enabled: false, created_at: new Date() };
+            mockSql.mockResolvedValueOnce([mockHook]);
+
+            const result = await db.updateHookEnabled(1, false);
+
+            expect(result).toEqual(mockHook);
+            expect(result!.enabled).toBe(false);
+        });
+
+        test('should return null when hook not found', async () => {
+            mockSql.mockResolvedValueOnce([]);
+
+            const result = await db.updateHookEnabled(999, false);
+
+            expect(result).toBeNull();
         });
     });
 

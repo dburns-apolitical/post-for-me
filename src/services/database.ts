@@ -32,6 +32,7 @@ export class DatabaseService {
             CREATE TABLE IF NOT EXISTS captions (
                 id SERIAL PRIMARY KEY,
                 text TEXT UNIQUE NOT NULL,
+                enabled BOOLEAN NOT NULL DEFAULT TRUE,
                 created_at TIMESTAMP DEFAULT NOW()
             )
         `;
@@ -48,6 +49,7 @@ export class DatabaseService {
             CREATE TABLE IF NOT EXISTS hooks (
                 id SERIAL PRIMARY KEY,
                 text TEXT UNIQUE NOT NULL,
+                enabled BOOLEAN NOT NULL DEFAULT TRUE,
                 created_at TIMESTAMP DEFAULT NOW()
             )
         `;
@@ -147,6 +149,32 @@ export class DatabaseService {
             END $$
         `;
 
+        // Add enabled column to hooks if it doesn't exist
+        await this.sql`
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'hooks' AND column_name = 'enabled'
+                ) THEN
+                    ALTER TABLE hooks ADD COLUMN enabled BOOLEAN NOT NULL DEFAULT TRUE;
+                END IF;
+            END $$
+        `;
+
+        // Add enabled column to captions if it doesn't exist
+        await this.sql`
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'captions' AND column_name = 'enabled'
+                ) THEN
+                    ALTER TABLE captions ADD COLUMN enabled BOOLEAN NOT NULL DEFAULT TRUE;
+                END IF;
+            END $$
+        `;
+
         // Create index for faster lookups
         await this.sql`
             CREATE INDEX IF NOT EXISTS idx_posts_status ON posts(status)
@@ -183,9 +211,41 @@ export class DatabaseService {
             INSERT INTO captions (text)
             VALUES (${text})
             ON CONFLICT (text) DO UPDATE SET text = EXCLUDED.text
-            RETURNING id, text, created_at
+            RETURNING id, text, enabled, created_at
         ` as DbCaption[];
         return result[0];
+    }
+
+    /**
+     * Create a new caption, returning null if it already exists (unique violation)
+     */
+    async createCaption(text: string): Promise<DbCaption | null> {
+        try {
+            const result = await this.sql`
+                INSERT INTO captions (text)
+                VALUES (${text})
+                RETURNING id, text, enabled, created_at
+            ` as DbCaption[];
+            return result[0];
+        } catch (error: any) {
+            if (error?.code === '23505' || error?.message?.includes('unique')) {
+                return null;
+            }
+            throw error;
+        }
+    }
+
+    /**
+     * Update the enabled status of a caption
+     */
+    async updateCaptionEnabled(id: number, enabled: boolean): Promise<DbCaption | null> {
+        const result = await this.sql`
+            UPDATE captions
+            SET enabled = ${enabled}
+            WHERE id = ${id}
+            RETURNING id, text, enabled, created_at
+        ` as DbCaption[];
+        return result.length > 0 ? result[0] : null;
     }
 
     /**
@@ -209,9 +269,41 @@ export class DatabaseService {
             INSERT INTO hooks (text)
             VALUES (${text})
             ON CONFLICT (text) DO UPDATE SET text = EXCLUDED.text
-            RETURNING id, text, created_at
+            RETURNING id, text, enabled, created_at
         ` as DbHook[];
         return result[0];
+    }
+
+    /**
+     * Create a new hook, returning null if it already exists (unique violation)
+     */
+    async createHook(text: string): Promise<DbHook | null> {
+        try {
+            const result = await this.sql`
+                INSERT INTO hooks (text)
+                VALUES (${text})
+                RETURNING id, text, enabled, created_at
+            ` as DbHook[];
+            return result[0];
+        } catch (error: any) {
+            if (error?.code === '23505' || error?.message?.includes('unique')) {
+                return null;
+            }
+            throw error;
+        }
+    }
+
+    /**
+     * Update the enabled status of a hook
+     */
+    async updateHookEnabled(id: number, enabled: boolean): Promise<DbHook | null> {
+        const result = await this.sql`
+            UPDATE hooks
+            SET enabled = ${enabled}
+            WHERE id = ${id}
+            RETURNING id, text, enabled, created_at
+        ` as DbHook[];
+        return result.length > 0 ? result[0] : null;
     }
 
     /**
@@ -343,8 +435,9 @@ export class DatabaseService {
      */
     async getRandomCaption(): Promise<DbCaption | null> {
         const result = await this.sql`
-            SELECT id, text, created_at
+            SELECT id, text, enabled, created_at
             FROM captions
+            WHERE enabled = TRUE
             ORDER BY RANDOM()
             LIMIT 1
         ` as DbCaption[];
@@ -356,8 +449,9 @@ export class DatabaseService {
      */
     async getRandomHook(): Promise<DbHook | null> {
         const result = await this.sql`
-            SELECT id, text, created_at
+            SELECT id, text, enabled, created_at
             FROM hooks
+            WHERE enabled = TRUE
             ORDER BY RANDOM()
             LIMIT 1
         ` as DbHook[];
@@ -513,9 +607,18 @@ export class DatabaseService {
     /**
      * Get all captions from the database
      */
-    async getAllCaptions(): Promise<DbCaption[]> {
+    async getAllCaptions(enabledOnly: boolean = false): Promise<DbCaption[]> {
+        if (enabledOnly) {
+            const result = await this.sql`
+                SELECT id, text, enabled, created_at
+                FROM captions
+                WHERE enabled = TRUE
+                ORDER BY created_at DESC
+            ` as DbCaption[];
+            return result;
+        }
         const result = await this.sql`
-            SELECT id, text, created_at
+            SELECT id, text, enabled, created_at
             FROM captions
             ORDER BY created_at DESC
         ` as DbCaption[];
@@ -525,9 +628,18 @@ export class DatabaseService {
     /**
      * Get all hooks from the database
      */
-    async getAllHooks(): Promise<DbHook[]> {
+    async getAllHooks(enabledOnly: boolean = false): Promise<DbHook[]> {
+        if (enabledOnly) {
+            const result = await this.sql`
+                SELECT id, text, enabled, created_at
+                FROM hooks
+                WHERE enabled = TRUE
+                ORDER BY created_at DESC
+            ` as DbHook[];
+            return result;
+        }
         const result = await this.sql`
-            SELECT id, text, created_at
+            SELECT id, text, enabled, created_at
             FROM hooks
             ORDER BY created_at DESC
         ` as DbHook[];
