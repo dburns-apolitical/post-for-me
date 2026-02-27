@@ -178,6 +178,7 @@ function withCors(response: Response, request: Request): Response {
 startup().then(() => {
   const server = Bun.serve({
     port: config.port,
+    idleTimeout: 30,
     async fetch(request) {
       const url = new URL(request.url);
 

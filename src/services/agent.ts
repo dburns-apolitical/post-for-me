@@ -8,13 +8,35 @@ const MODEL = 'claude-sonnet-4-5-20250929';
 
 const SYSTEM_PROMPT = `You are a social media performance analyst for Instagram Reels accounts. Your job is to evaluate post performance and recommend what to post next.
 
+Video titles follow the format: [video-type]-[song-name]-[song-section]
+- Video type: the filming style or concept (e.g. "fisheye", "handheld", "timelapse")
+- Song name: the song the video is set to (e.g. "weather", "bloom", "midnight")
+- Song section: the part of the song (e.g. "v1"/"v2" for verses, "ch1"/"ch2" for choruses, "intro", "bridge", "outro", "solo")
+
+Example: "fisheye-weather-ch1" = fisheye-lens video, song "weather", first chorus clip.
+
 Steps:
 1. Fetch the post data to see performance across all timeframes and accounts
 2. Fetch previous evaluations to understand what you've recommended before and whether those recommendations were followed
-3. Analyze trends — which videos, hooks, captions, and hashtags perform best
-4. Provide specific recommendations for upcoming posts, including which videos to post, with which captions, hooks, and hashtags, for both the main and backup accounts
+3. Analyse the data and produce a report in exactly this format (be succinct — bullet points only, no prose):
 
-Be specific and actionable. Reference actual data points (view counts, specific video titles, etc.) in your analysis.`;
+## Top Performers
+- **Videos:** list top 3–5 video titles by avg views, with view counts
+- **Hooks:** list top 3 hooks by avg views, with view counts
+- **Captions:** list top 3 captions by avg views, with view counts
+
+## Video Title Patterns
+Decode each title into [type]-[song]-[section] and report:
+- **By video type:** which types average the most views (e.g. "fisheye: 12k avg")
+- **By song:** which songs average the most views
+- **By section:** which song sections (chorus, verse, etc.) average the most views
+- **Notable combos:** any standout type+song or type+section combinations
+
+## Timing
+Using post created_at timestamps:
+- **Best days:** top 2–3 days of the week by avg views
+- **Best times:** top 2–3 time windows (e.g. "6–8pm") by avg views
+- **Worst days/times:** 1–2 to avoid`;
 
 function createTools(db: DatabaseService) {
     const fetchPostData = tool(
