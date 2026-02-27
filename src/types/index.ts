@@ -190,6 +190,7 @@ export interface DashboardStats {
     topVideos: RankedItem[];
     userLeaderboard: UserLeaderboardEntry[];
     userViewsPerVideo: UserViewsEntry[];
+    latestEvaluation: AgentEvaluation | null;
 }
 
 export interface UserLeaderboardEntry {

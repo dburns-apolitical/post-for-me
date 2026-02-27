@@ -9,6 +9,7 @@ import { handleHooks, handleHookById } from './routes/hooks.js';
 import { handleVideos } from './routes/videos.js';
 import { handleSyncViews } from './routes/sync-views.js';
 import { handleRunEvaluation } from './routes/run-evaluation.js';
+import { handleEvaluations } from './routes/evaluations.js';
 import { DatabaseService } from './services/database.js';
 import { ViewsSyncCronService } from './services/views-sync-cron.js';
 import { AgentEvalCronService } from './services/agent-eval-cron.js';
@@ -247,7 +248,11 @@ startup().then(() => {
         return withCors(await handleSyncViews(request, viewsSyncCron), request);
       }
 
-      // Agent evaluation endpoint (requires admin authentication)
+      // Agent evaluation endpoints (requires admin authentication)
+      if (url.pathname === '/api/evaluations' && request.method === 'GET') {
+        return withCors(await handleEvaluations(request), request);
+      }
+
       if (url.pathname === '/api/run-evaluation' && request.method === 'POST') {
         return withCors(await handleRunEvaluation(request), request);
       }

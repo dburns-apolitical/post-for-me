@@ -3,6 +3,7 @@ import { getConfig } from '../config/index.js';
 import { logger } from '../utils/logger.js';
 import { validateAuth, unauthorizedResponse, forbiddenResponse } from '../utils/auth.js';
 import type {
+    AgentEvaluation,
     DashboardStats,
     PostWithDetails,
     RankedItem,
@@ -57,6 +58,7 @@ export async function handleStats(request: Request): Promise<Response> {
             topVideosResult,
             userLeaderboardResult,
             userViewsPerVideoResult,
+            latestEvaluationResult,
         ] = await Promise.all([
             getTopPosts(sql, accountId),
             getMostRecentPost(sql, accountId),
@@ -68,6 +70,7 @@ export async function handleStats(request: Request): Promise<Response> {
             getTopVideos(sql, accountId),
             getUserLeaderboard(sql, accountId),
             getUserViewsPerVideo(sql, accountId),
+            getLatestEvaluation(sql),
         ]);
 
         const stats: DashboardStats = {
@@ -81,6 +84,7 @@ export async function handleStats(request: Request): Promise<Response> {
             topVideos: topVideosResult,
             userLeaderboard: userLeaderboardResult,
             userViewsPerVideo: userViewsPerVideoResult,
+            latestEvaluation: latestEvaluationResult,
         };
 
         return Response.json({
@@ -536,4 +540,18 @@ function mapRankedRow(row: RawRankedRow): RankedItem {
         totalViews: parseInt(row.total_views, 10) || 0,
         avgViews: Math.round(parseFloat(row.avg_views) || 0),
     };
+}
+
+/**
+ * Get the most recent agent evaluation
+ */
+async function getLatestEvaluation(sql: NeonSQL): Promise<AgentEvaluation | null> {
+    const rows = await sql`
+        SELECT id, response, model, input_tokens, output_tokens, triggered_by, created_at
+        FROM agent_evaluations
+        ORDER BY created_at DESC
+        LIMIT 1
+    ` as AgentEvaluation[];
+
+    return rows.length > 0 ? rows[0] : null;
 }
