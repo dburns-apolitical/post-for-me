@@ -541,6 +541,7 @@ export class DatabaseService {
                 h.text as hook_text,
                 c.id as caption_id,
                 c.text as caption_text,
+                a.name as account_name,
                 COALESCE(
                     ARRAY_AGG(ht.text ORDER BY ht.id) FILTER (WHERE ht.text IS NOT NULL),
                     ARRAY[]::text[]
@@ -549,10 +550,11 @@ export class DatabaseService {
             JOIN videos v ON p.video_id = v.id
             JOIN hooks h ON p.hook_id = h.id
             JOIN captions c ON p.caption_id = c.id
+            JOIN accounts a ON p.account_id = a.id
             JOIN hashtag_combinations hc ON p.hashtag_combination_id = hc.id
             LEFT JOIN hashtags ht ON ht.id IN (hc.hashtag1_id, hc.hashtag2_id, hc.hashtag3_id, hc.hashtag4_id, hc.hashtag5_id)
             WHERE p.id = ${postId}
-            GROUP BY p.id, v.id, v.title, h.id, h.text, c.id, c.text
+            GROUP BY p.id, v.id, v.title, h.id, h.text, c.id, c.text, a.name
         ` as {
             id: number;
             instagram_post_id: string | null;
@@ -566,6 +568,7 @@ export class DatabaseService {
             hook_text: string;
             caption_id: number;
             caption_text: string;
+            account_name: string;
             hashtags: string[];
         }[];
 
@@ -594,6 +597,7 @@ export class DatabaseService {
                 text: row.caption_text,
             },
             hashtags: row.hashtags || [],
+            account_name: row.account_name,
         };
     }
 

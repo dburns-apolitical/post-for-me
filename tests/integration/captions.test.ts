@@ -14,6 +14,9 @@ const authHeaders = {
     'X-Dashboard-Password': process.env.DASHBOARD_PASSWORD || 'test-password',
 };
 
+// Helper to parse JSON response body
+const json = (res: Response) => res.json() as Promise<any>;
+
 describe('GET /api/captions', () => {
     beforeEach(() => {
         mockSql.mockClear();
@@ -27,7 +30,7 @@ describe('GET /api/captions', () => {
         const response = await handleCaptions(request);
 
         expect(response.status).toBe(401);
-        const body = await response.json();
+        const body = await json(response);
         expect(body.success).toBe(false);
     });
 
@@ -45,7 +48,7 @@ describe('GET /api/captions', () => {
         const response = await handleCaptions(request);
 
         expect(response.status).toBe(200);
-        const body = await response.json();
+        const body = await json(response);
         expect(body.success).toBe(true);
         expect(body.captions).toBeDefined();
         expect(Array.isArray(body.captions)).toBe(true);
@@ -75,7 +78,7 @@ describe('GET /api/captions', () => {
         const response = await handleCaptions(request);
 
         expect(response.status).toBe(200);
-        const body = await response.json();
+        const body = await json(response);
         expect(body.success).toBe(true);
     });
 });
@@ -110,7 +113,7 @@ describe('POST /api/captions', () => {
         const response = await handleCaptions(request);
 
         expect(response.status).toBe(201);
-        const body = await response.json();
+        const body = await json(response);
         expect(body.success).toBe(true);
         expect(body.caption.text).toBe('New caption');
     });
@@ -129,7 +132,7 @@ describe('POST /api/captions', () => {
         const response = await handleCaptions(request);
 
         expect(response.status).toBe(409);
-        const body = await response.json();
+        const body = await json(response);
         expect(body.success).toBe(false);
         expect(body.error).toBe('A caption with this text already exists');
     });
@@ -144,7 +147,7 @@ describe('POST /api/captions', () => {
         const response = await handleCaptions(request);
 
         expect(response.status).toBe(400);
-        const body = await response.json();
+        const body = await json(response);
         expect(body.success).toBe(false);
     });
 
@@ -158,7 +161,7 @@ describe('POST /api/captions', () => {
         const response = await handleCaptions(request);
 
         expect(response.status).toBe(400);
-        const body = await response.json();
+        const body = await json(response);
         expect(body.success).toBe(false);
     });
 });
@@ -193,7 +196,7 @@ describe('PATCH /api/captions/:id', () => {
         const response = await handleCaptionById(request, 1);
 
         expect(response.status).toBe(200);
-        const body = await response.json();
+        const body = await json(response);
         expect(body.success).toBe(true);
         expect(body.caption.enabled).toBe(false);
     });
@@ -210,7 +213,7 @@ describe('PATCH /api/captions/:id', () => {
         const response = await handleCaptionById(request, 999);
 
         expect(response.status).toBe(404);
-        const body = await response.json();
+        const body = await json(response);
         expect(body.success).toBe(false);
         expect(body.error).toBe('Caption not found');
     });
@@ -225,7 +228,7 @@ describe('PATCH /api/captions/:id', () => {
         const response = await handleCaptionById(request, 1);
 
         expect(response.status).toBe(400);
-        const body = await response.json();
+        const body = await json(response);
         expect(body.success).toBe(false);
     });
 
@@ -255,7 +258,7 @@ describe('Unsupported methods on /api/captions', () => {
         const response = await handleCaptions(request);
 
         expect(response.status).toBe(405);
-        const body = await response.json();
+        const body = await json(response);
         expect(body.error).toBe('Method not allowed');
     });
 });

@@ -155,6 +155,7 @@ export interface PostWithDetails {
         text: string;
     };
     hashtags: string[];
+    account_name: string;
 }
 
 export interface RankedItem {

@@ -21,7 +21,7 @@ describe('DatabaseService', () => {
 
     describe('upsertCaption', () => {
         test('should insert and return caption', async () => {
-            const mockCaption = { id: 1, text: 'Test caption', created_at: new Date() };
+            const mockCaption = { id: 1, text: 'Test caption', enabled: true, created_at: new Date() };
             mockSql.mockResolvedValueOnce([mockCaption]);
 
             const result = await db.upsertCaption('Test caption');
@@ -43,7 +43,7 @@ describe('DatabaseService', () => {
 
     describe('upsertHook', () => {
         test('should insert and return hook', async () => {
-            const mockHook = { id: 1, text: 'Test hook', created_at: new Date() };
+            const mockHook = { id: 1, text: 'Test hook', enabled: true, created_at: new Date() };
             mockSql.mockResolvedValueOnce([mockHook]);
 
             const result = await db.upsertHook('Test hook');
@@ -114,6 +114,7 @@ describe('DatabaseService', () => {
                 views: null,
                 status: 'pending' as PostStatus,
                 account_id: 2,
+                shared_to_feed: false,
                 created_at: new Date(),
                 updated_at: new Date(),
             };
@@ -137,6 +138,7 @@ describe('DatabaseService', () => {
                 views: null,
                 status: 'pending' as PostStatus,
                 account_id: 1,
+                shared_to_feed: false,
                 created_at: new Date(),
                 updated_at: new Date(),
             };
@@ -206,7 +208,7 @@ describe('DatabaseService', () => {
 
     describe('getRandomCaption', () => {
         test('should return random caption', async () => {
-            const mockCaption = { id: 1, text: 'Random caption', created_at: new Date() };
+            const mockCaption = { id: 1, text: 'Random caption', enabled: true, created_at: new Date() };
             mockSql.mockResolvedValueOnce([mockCaption]);
 
             const result = await db.getRandomCaption();
@@ -225,7 +227,7 @@ describe('DatabaseService', () => {
 
     describe('getRandomHook', () => {
         test('should return random hook', async () => {
-            const mockHook = { id: 1, text: 'Random hook', created_at: new Date() };
+            const mockHook = { id: 1, text: 'Random hook', enabled: true, created_at: new Date() };
             mockSql.mockResolvedValueOnce([mockHook]);
 
             const result = await db.getRandomHook();

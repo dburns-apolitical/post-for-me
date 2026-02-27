@@ -4,7 +4,7 @@ import { describe, test, expect, mock, beforeEach } from 'bun:test';
 const mockFetch = mock(() => Promise.resolve({
     ok: true,
     json: () => Promise.resolve({ items: [] }),
-}) as unknown as typeof fetch);
+}) as unknown as ReturnType<typeof fetch>);
 
 // Store original fetch
 const originalFetch = global.fetch;
@@ -17,10 +17,13 @@ mock.module('@neondatabase/serverless', () => ({
 // Import after mocking
 import { handleVideos } from '../../src/routes/videos';
 
+// Helper to parse JSON response body
+const json = (res: Response) => res.json() as Promise<any>;
+
 describe('GET /api/videos', () => {
     beforeEach(() => {
         mockFetch.mockClear();
-        global.fetch = mockFetch;
+        global.fetch = mockFetch as unknown as typeof fetch;
     });
 
     test('should return 401 without authentication', async () => {
@@ -31,7 +34,7 @@ describe('GET /api/videos', () => {
         const response = await handleVideos(request);
 
         expect(response.status).toBe(401);
-        const body = await response.json();
+        const body = await json(response);
         expect(body.success).toBe(false);
     });
 
@@ -56,7 +59,7 @@ describe('GET /api/videos', () => {
         const response = await handleVideos(request);
 
         expect(response.status).toBe(200);
-        const body = await response.json();
+        const body = await json(response);
         expect(body.success).toBe(true);
         expect(body.videos).toBeDefined();
         expect(Array.isArray(body.videos)).toBe(true);

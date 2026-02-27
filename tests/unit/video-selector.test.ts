@@ -110,15 +110,15 @@ describe('VideoSelectorService', () => {
         ok: true,
         status: 204,
       }) as unknown as ReturnType<typeof fetch>);
-      global.fetch = mockFetchFn;
+      global.fetch = mockFetchFn as unknown as typeof fetch;
 
       try {
         await service.deleteEditedVideo('https://storage.googleapis.com/molars-reels/edited/test-video.mp4');
 
         expect(mockFetchFn).toHaveBeenCalledTimes(1);
-        const [url, options] = mockFetchFn.mock.calls[0];
-        expect(url).toBe('https://storage.googleapis.com/storage/v1/b/molars-reels/o/edited%2Ftest-video.mp4');
-        expect(options).toEqual({ method: 'DELETE' });
+        const call = mockFetchFn.mock.calls[0] as unknown as [string, RequestInit];
+        expect(call[0]).toBe('https://storage.googleapis.com/storage/v1/b/molars-reels/o/edited%2Ftest-video.mp4');
+        expect(call[1]).toEqual({ method: 'DELETE' });
       } finally {
         global.fetch = originalFetch;
       }
@@ -131,7 +131,7 @@ describe('VideoSelectorService', () => {
       global.fetch = mock(() => Promise.resolve({
         ok: false,
         status: 404,
-      }) as unknown as typeof fetch);
+      }) as unknown as ReturnType<typeof fetch>) as unknown as typeof fetch;
 
       try {
         // Should not throw
@@ -148,7 +148,7 @@ describe('VideoSelectorService', () => {
       const mockFetchFn = mock(() => Promise.resolve({
         ok: true,
       }) as unknown as ReturnType<typeof fetch>);
-      global.fetch = mockFetchFn;
+      global.fetch = mockFetchFn as unknown as typeof fetch;
 
       try {
         await service.deleteEditedVideo('https://example.com/some-other-bucket/video.mp4');
@@ -167,7 +167,7 @@ describe('VideoSelectorService', () => {
         ok: false,
         status: 500,
         text: () => Promise.resolve('Internal Server Error'),
-      }) as unknown as typeof fetch);
+      }) as unknown as ReturnType<typeof fetch>) as unknown as typeof fetch;
 
       try {
         // Should not throw - errors are caught and logged
@@ -194,7 +194,7 @@ describe('VideoSelectorService', () => {
             { name: 'document.pdf', timeCreated: '2025-01-04T00:00:00Z' },
           ],
         }),
-      }) as unknown as typeof fetch);
+      }) as unknown as ReturnType<typeof fetch>) as unknown as typeof fetch;
 
       try {
         const result = await service.listAllVideoNames();
@@ -214,7 +214,7 @@ describe('VideoSelectorService', () => {
       global.fetch = mock(() => Promise.resolve({
         ok: true,
         json: () => Promise.resolve({ items: [] }),
-      }) as unknown as typeof fetch);
+      }) as unknown as ReturnType<typeof fetch>) as unknown as typeof fetch;
 
       try {
         const result = await service.listAllVideoNames();
@@ -238,7 +238,7 @@ describe('VideoSelectorService', () => {
             { name: 'video2.mov', timeCreated: '2025-01-02T00:00:00Z' },
           ],
         }),
-      }) as unknown as typeof fetch);
+      }) as unknown as ReturnType<typeof fetch>) as unknown as typeof fetch;
 
       try {
         const result = await service.findVideoByTitle('video1.mp4');
@@ -262,7 +262,7 @@ describe('VideoSelectorService', () => {
             { name: 'video2.mov', timeCreated: '2025-01-02T00:00:00Z' },
           ],
         }),
-      }) as unknown as typeof fetch);
+      }) as unknown as ReturnType<typeof fetch>) as unknown as typeof fetch;
 
       try {
         const result = await service.findVideoByTitle('nonexistent.mp4');
@@ -284,7 +284,7 @@ describe('VideoSelectorService', () => {
             { name: 'Video1.mp4', timeCreated: '2025-01-01T00:00:00Z' },
           ],
         }),
-      }) as unknown as typeof fetch);
+      }) as unknown as ReturnType<typeof fetch>) as unknown as typeof fetch;
 
       try {
         const result = await service.findVideoByTitle('video1.mp4');

@@ -14,6 +14,9 @@ const authHeaders = {
     'X-Dashboard-Password': process.env.DASHBOARD_PASSWORD || 'test-password',
 };
 
+// Helper to parse JSON response body
+const json = (res: Response) => res.json() as Promise<any>;
+
 describe('GET /api/hooks', () => {
     beforeEach(() => {
         mockSql.mockClear();
@@ -27,7 +30,7 @@ describe('GET /api/hooks', () => {
         const response = await handleHooks(request);
 
         expect(response.status).toBe(401);
-        const body = await response.json();
+        const body = await json(response);
         expect(body.success).toBe(false);
     });
 
@@ -45,7 +48,7 @@ describe('GET /api/hooks', () => {
         const response = await handleHooks(request);
 
         expect(response.status).toBe(200);
-        const body = await response.json();
+        const body = await json(response);
         expect(body.success).toBe(true);
         expect(body.hooks).toBeDefined();
         expect(Array.isArray(body.hooks)).toBe(true);
@@ -62,7 +65,7 @@ describe('GET /api/hooks', () => {
         const response = await handleHooks(request);
 
         expect(response.status).toBe(200);
-        const body = await response.json();
+        const body = await json(response);
         expect(body.success).toBe(true);
     });
 });
@@ -97,7 +100,7 @@ describe('POST /api/hooks', () => {
         const response = await handleHooks(request);
 
         expect(response.status).toBe(201);
-        const body = await response.json();
+        const body = await json(response);
         expect(body.success).toBe(true);
         expect(body.hook.text).toBe('New hook');
     });
@@ -116,7 +119,7 @@ describe('POST /api/hooks', () => {
         const response = await handleHooks(request);
 
         expect(response.status).toBe(409);
-        const body = await response.json();
+        const body = await json(response);
         expect(body.success).toBe(false);
         expect(body.error).toBe('A hook with this text already exists');
     });
@@ -131,7 +134,7 @@ describe('POST /api/hooks', () => {
         const response = await handleHooks(request);
 
         expect(response.status).toBe(400);
-        const body = await response.json();
+        const body = await json(response);
         expect(body.success).toBe(false);
     });
 
@@ -145,7 +148,7 @@ describe('POST /api/hooks', () => {
         const response = await handleHooks(request);
 
         expect(response.status).toBe(400);
-        const body = await response.json();
+        const body = await json(response);
         expect(body.success).toBe(false);
     });
 });
@@ -180,7 +183,7 @@ describe('PATCH /api/hooks/:id', () => {
         const response = await handleHookById(request, 1);
 
         expect(response.status).toBe(200);
-        const body = await response.json();
+        const body = await json(response);
         expect(body.success).toBe(true);
         expect(body.hook.enabled).toBe(false);
     });
@@ -197,7 +200,7 @@ describe('PATCH /api/hooks/:id', () => {
         const response = await handleHookById(request, 999);
 
         expect(response.status).toBe(404);
-        const body = await response.json();
+        const body = await json(response);
         expect(body.success).toBe(false);
         expect(body.error).toBe('Hook not found');
     });
@@ -212,7 +215,7 @@ describe('PATCH /api/hooks/:id', () => {
         const response = await handleHookById(request, 1);
 
         expect(response.status).toBe(400);
-        const body = await response.json();
+        const body = await json(response);
         expect(body.success).toBe(false);
     });
 
@@ -242,7 +245,7 @@ describe('Unsupported methods on /api/hooks', () => {
         const response = await handleHooks(request);
 
         expect(response.status).toBe(405);
-        const body = await response.json();
+        const body = await json(response);
         expect(body.error).toBe('Method not allowed');
     });
 });
