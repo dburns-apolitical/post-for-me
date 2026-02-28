@@ -566,10 +566,12 @@ export class DatabaseService {
      */
     async getRandomHashtags(accountId: number, count: number = 5): Promise<DbHashtag[]> {
         const result = await this.sql`
-            SELECT DISTINCT h.id, h.text, h.created_at
-            FROM hashtags h
-            JOIN hashtag_combinations hc ON h.id IN (hc.hashtag1_id, hc.hashtag2_id, hc.hashtag3_id, hc.hashtag4_id, hc.hashtag5_id)
-            JOIN account_hashtag_combinations ahc ON ahc.hashtag_combination_id = hc.id AND ahc.account_id = ${accountId}
+            SELECT id, text, created_at FROM (
+                SELECT DISTINCT h.id, h.text, h.created_at
+                FROM hashtags h
+                JOIN hashtag_combinations hc ON h.id IN (hc.hashtag1_id, hc.hashtag2_id, hc.hashtag3_id, hc.hashtag4_id, hc.hashtag5_id)
+                JOIN account_hashtag_combinations ahc ON ahc.hashtag_combination_id = hc.id AND ahc.account_id = ${accountId}
+            ) sub
             ORDER BY RANDOM()
             LIMIT ${count}
         ` as DbHashtag[];
