@@ -8,7 +8,7 @@ export const postReelSchema = z.object({
         .max(30, 'Maximum 30 hashtags allowed')
         .optional(),
     shareToFeed: z.boolean().optional(),
-    accountId: z.number().int().min(1).max(2).optional(),
+    accountId: z.number().int().min(1, 'accountId is required'),
     videoTitle: z.string().min(1, 'Video title cannot be empty').max(500, 'Video title too long').optional(),
 });
 

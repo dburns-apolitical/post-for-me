@@ -5,13 +5,16 @@ import type {
     PostStatus,
     DbAccount,
     DbCaption,
+    DbCaptionWithAccounts,
     DbHashtag,
     DbHook,
+    DbHookWithAccounts,
     DbHashtagCombination,
     DbVideo,
     DbPost,
     PostWithDetails,
     AgentEvaluation,
+    ContentAccount,
 } from '../types/index.js';
 
 export class DatabaseService {
@@ -98,14 +101,112 @@ export class DatabaseService {
             )
         `;
 
-        // Seed default accounts
+        // Add ig_access_token column to accounts if it doesn't exist
         await this.sql`
-            INSERT INTO accounts (id, name) VALUES (1, 'Molars UK (MAIN ACCOUNT)')
-            ON CONFLICT (id) DO NOTHING
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'accounts' AND column_name = 'ig_access_token'
+                ) THEN
+                    ALTER TABLE accounts ADD COLUMN ig_access_token TEXT NOT NULL DEFAULT '';
+                END IF;
+            END $$
+        `;
+
+        // Add ig_user_id column to accounts if it doesn't exist
+        await this.sql`
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'accounts' AND column_name = 'ig_user_id'
+                ) THEN
+                    ALTER TABLE accounts ADD COLUMN ig_user_id TEXT NOT NULL DEFAULT '';
+                END IF;
+            END $$
+        `;
+
+        // Add gcs_bucket_name column to accounts if it doesn't exist
+        await this.sql`
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'accounts' AND column_name = 'gcs_bucket_name'
+                ) THEN
+                    ALTER TABLE accounts ADD COLUMN gcs_bucket_name TEXT NOT NULL DEFAULT '';
+                END IF;
+            END $$
+        `;
+
+        // Create junction tables
+        await this.sql`
+            CREATE TABLE IF NOT EXISTS account_captions (
+                account_id INTEGER REFERENCES accounts(id) ON DELETE CASCADE,
+                caption_id INTEGER REFERENCES captions(id) ON DELETE CASCADE,
+                PRIMARY KEY (account_id, caption_id)
+            )
+        `;
+
+        await this.sql`
+            CREATE TABLE IF NOT EXISTS account_hooks (
+                account_id INTEGER REFERENCES accounts(id) ON DELETE CASCADE,
+                hook_id INTEGER REFERENCES hooks(id) ON DELETE CASCADE,
+                PRIMARY KEY (account_id, hook_id)
+            )
+        `;
+
+        await this.sql`
+            CREATE TABLE IF NOT EXISTS account_hashtag_combinations (
+                account_id INTEGER REFERENCES accounts(id) ON DELETE CASCADE,
+                hashtag_combination_id INTEGER REFERENCES hashtag_combinations(id) ON DELETE CASCADE,
+                PRIMARY KEY (account_id, hashtag_combination_id)
+            )
+        `;
+
+        // Seed default accounts with credentials from env
+        await this.sql`
+            INSERT INTO accounts (id, name, ig_access_token, ig_user_id, gcs_bucket_name)
+            VALUES (1, 'Molars UK (MAIN ACCOUNT)',
+                    ${process.env.INSTAGRAM_ACCESS_TOKEN_1 || ''},
+                    ${process.env.INSTAGRAM_USER_ID_1 || ''},
+                    ${process.env.GCS_BUCKET_NAME || ''})
+            ON CONFLICT (id) DO UPDATE SET
+                ig_access_token = CASE WHEN accounts.ig_access_token = '' THEN EXCLUDED.ig_access_token ELSE accounts.ig_access_token END,
+                ig_user_id = CASE WHEN accounts.ig_user_id = '' THEN EXCLUDED.ig_user_id ELSE accounts.ig_user_id END,
+                gcs_bucket_name = CASE WHEN accounts.gcs_bucket_name = '' THEN EXCLUDED.gcs_bucket_name ELSE accounts.gcs_bucket_name END
         `;
         await this.sql`
-            INSERT INTO accounts (id, name) VALUES (2, 'MLRSUK (BACKUP ACCOUNT)')
-            ON CONFLICT (id) DO NOTHING
+            INSERT INTO accounts (id, name, ig_access_token, ig_user_id, gcs_bucket_name)
+            VALUES (2, 'MLRSUK (BACKUP ACCOUNT)',
+                    ${process.env.INSTAGRAM_ACCESS_TOKEN_2 || ''},
+                    ${process.env.INSTAGRAM_USER_ID_2 || ''},
+                    ${process.env.GCS_BUCKET_NAME || ''})
+            ON CONFLICT (id) DO UPDATE SET
+                ig_access_token = CASE WHEN accounts.ig_access_token = '' THEN EXCLUDED.ig_access_token ELSE accounts.ig_access_token END,
+                ig_user_id = CASE WHEN accounts.ig_user_id = '' THEN EXCLUDED.ig_user_id ELSE accounts.ig_user_id END,
+                gcs_bucket_name = CASE WHEN accounts.gcs_bucket_name = '' THEN EXCLUDED.gcs_bucket_name ELSE accounts.gcs_bucket_name END
+        `;
+
+        // Populate junction tables for existing accounts (seed all content to both accounts)
+        await this.sql`
+            INSERT INTO account_captions (account_id, caption_id)
+            SELECT a.id, c.id FROM accounts a CROSS JOIN captions c
+            WHERE a.id IN (1, 2)
+            ON CONFLICT DO NOTHING
+        `;
+        await this.sql`
+            INSERT INTO account_hooks (account_id, hook_id)
+            SELECT a.id, h.id FROM accounts a CROSS JOIN hooks h
+            WHERE a.id IN (1, 2)
+            ON CONFLICT DO NOTHING
+        `;
+        await this.sql`
+            INSERT INTO account_hashtag_combinations (account_id, hashtag_combination_id)
+            SELECT a.id, hc.id FROM accounts a CROSS JOIN hashtag_combinations hc
+            WHERE a.id IN (1, 2)
+            ON CONFLICT DO NOTHING
         `;
 
         await this.sql`
@@ -433,11 +534,12 @@ export class DatabaseService {
     /**
      * Get a random caption from the database
      */
-    async getRandomCaption(): Promise<DbCaption | null> {
+    async getRandomCaption(accountId: number): Promise<DbCaption | null> {
         const result = await this.sql`
-            SELECT id, text, enabled, created_at
-            FROM captions
-            WHERE enabled = TRUE
+            SELECT c.id, c.text, c.enabled, c.created_at
+            FROM captions c
+            JOIN account_captions ac ON ac.caption_id = c.id AND ac.account_id = ${accountId}
+            WHERE c.enabled = TRUE
             ORDER BY RANDOM()
             LIMIT 1
         ` as DbCaption[];
@@ -447,11 +549,12 @@ export class DatabaseService {
     /**
      * Get a random hook from the database
      */
-    async getRandomHook(): Promise<DbHook | null> {
+    async getRandomHook(accountId: number): Promise<DbHook | null> {
         const result = await this.sql`
-            SELECT id, text, enabled, created_at
-            FROM hooks
-            WHERE enabled = TRUE
+            SELECT h.id, h.text, h.enabled, h.created_at
+            FROM hooks h
+            JOIN account_hooks ah ON ah.hook_id = h.id AND ah.account_id = ${accountId}
+            WHERE h.enabled = TRUE
             ORDER BY RANDOM()
             LIMIT 1
         ` as DbHook[];
@@ -461,10 +564,12 @@ export class DatabaseService {
     /**
      * Get random hashtags from the database
      */
-    async getRandomHashtags(count: number = 5): Promise<DbHashtag[]> {
+    async getRandomHashtags(accountId: number, count: number = 5): Promise<DbHashtag[]> {
         const result = await this.sql`
-            SELECT id, text, created_at
-            FROM hashtags
+            SELECT DISTINCT h.id, h.text, h.created_at
+            FROM hashtags h
+            JOIN hashtag_combinations hc ON h.id IN (hc.hashtag1_id, hc.hashtag2_id, hc.hashtag3_id, hc.hashtag4_id, hc.hashtag5_id)
+            JOIN account_hashtag_combinations ahc ON ahc.hashtag_combination_id = hc.id AND ahc.account_id = ${accountId}
             ORDER BY RANDOM()
             LIMIT ${count}
         ` as DbHashtag[];
@@ -603,51 +708,309 @@ export class DatabaseService {
 
     async getAccounts(): Promise<DbAccount[]> {
         const result = await this.sql`
-            SELECT id, name, created_at FROM accounts ORDER BY id
+            SELECT id, name, ig_access_token, ig_user_id, gcs_bucket_name, created_at
+            FROM accounts ORDER BY id
         ` as DbAccount[];
         return result;
+    }
+
+    async getAccount(id: number): Promise<DbAccount | null> {
+        const result = await this.sql`
+            SELECT id, name, ig_access_token, ig_user_id, gcs_bucket_name, created_at
+            FROM accounts WHERE id = ${id}
+        ` as DbAccount[];
+        return result.length > 0 ? result[0] : null;
+    }
+
+    async createAccount(
+        name: string,
+        igAccessToken: string,
+        igUserId: string,
+        gcsBucketName: string
+    ): Promise<DbAccount> {
+        const result = await this.sql`
+            INSERT INTO accounts (name, ig_access_token, ig_user_id, gcs_bucket_name)
+            VALUES (${name}, ${igAccessToken}, ${igUserId}, ${gcsBucketName})
+            RETURNING id, name, ig_access_token, ig_user_id, gcs_bucket_name, created_at
+        ` as DbAccount[];
+        return result[0];
+    }
+
+    async updateAccount(
+        id: number,
+        fields: { name?: string; ig_access_token?: string; ig_user_id?: string; gcs_bucket_name?: string }
+    ): Promise<DbAccount | null> {
+        const result = await this.sql`
+            UPDATE accounts SET
+                name = COALESCE(${fields.name ?? null}, name),
+                ig_access_token = COALESCE(${fields.ig_access_token ?? null}, ig_access_token),
+                ig_user_id = COALESCE(${fields.ig_user_id ?? null}, ig_user_id),
+                gcs_bucket_name = COALESCE(${fields.gcs_bucket_name ?? null}, gcs_bucket_name)
+            WHERE id = ${id}
+            RETURNING id, name, ig_access_token, ig_user_id, gcs_bucket_name, created_at
+        ` as DbAccount[];
+        return result.length > 0 ? result[0] : null;
+    }
+
+    async deleteAccount(id: number): Promise<{ deleted: boolean; error?: string }> {
+        const postCheck = await this.sql`
+            SELECT COUNT(*) as count FROM posts WHERE account_id = ${id}
+        ` as { count: string }[];
+
+        if (parseInt(postCheck[0].count, 10) > 0) {
+            return { deleted: false, error: 'Cannot delete account with existing posts' };
+        }
+
+        const result = await this.sql`
+            DELETE FROM accounts WHERE id = ${id} RETURNING id
+        ` as { id: number }[];
+
+        return { deleted: result.length > 0 };
     }
 
     /**
      * Get all captions from the database
      */
-    async getAllCaptions(enabledOnly: boolean = false): Promise<DbCaption[]> {
-        if (enabledOnly) {
-            const result = await this.sql`
-                SELECT id, text, enabled, created_at
-                FROM captions
-                WHERE enabled = TRUE
-                ORDER BY created_at DESC
+    async getAllCaptions(enabledOnly: boolean = false, accountId?: number): Promise<DbCaption[]> {
+        if (accountId !== undefined) {
+            if (enabledOnly) {
+                return await this.sql`
+                    SELECT c.id, c.text, c.enabled, c.created_at
+                    FROM captions c
+                    JOIN account_captions ac ON ac.caption_id = c.id AND ac.account_id = ${accountId}
+                    WHERE c.enabled = TRUE
+                    ORDER BY c.created_at DESC
+                ` as DbCaption[];
+            }
+            return await this.sql`
+                SELECT c.id, c.text, c.enabled, c.created_at
+                FROM captions c
+                JOIN account_captions ac ON ac.caption_id = c.id AND ac.account_id = ${accountId}
+                ORDER BY c.created_at DESC
             ` as DbCaption[];
-            return result;
         }
-        const result = await this.sql`
-            SELECT id, text, enabled, created_at
-            FROM captions
-            ORDER BY created_at DESC
+        if (enabledOnly) {
+            return await this.sql`
+                SELECT id, text, enabled, created_at FROM captions WHERE enabled = TRUE ORDER BY created_at DESC
+            ` as DbCaption[];
+        }
+        return await this.sql`
+            SELECT id, text, enabled, created_at FROM captions ORDER BY created_at DESC
         ` as DbCaption[];
-        return result;
     }
 
     /**
      * Get all hooks from the database
      */
-    async getAllHooks(enabledOnly: boolean = false): Promise<DbHook[]> {
-        if (enabledOnly) {
-            const result = await this.sql`
-                SELECT id, text, enabled, created_at
-                FROM hooks
-                WHERE enabled = TRUE
-                ORDER BY created_at DESC
+    async getAllHooks(enabledOnly: boolean = false, accountId?: number): Promise<DbHook[]> {
+        if (accountId !== undefined) {
+            if (enabledOnly) {
+                return await this.sql`
+                    SELECT h.id, h.text, h.enabled, h.created_at
+                    FROM hooks h
+                    JOIN account_hooks ah ON ah.hook_id = h.id AND ah.account_id = ${accountId}
+                    WHERE h.enabled = TRUE
+                    ORDER BY h.created_at DESC
+                ` as DbHook[];
+            }
+            return await this.sql`
+                SELECT h.id, h.text, h.enabled, h.created_at
+                FROM hooks h
+                JOIN account_hooks ah ON ah.hook_id = h.id AND ah.account_id = ${accountId}
+                ORDER BY h.created_at DESC
             ` as DbHook[];
-            return result;
         }
-        const result = await this.sql`
-            SELECT id, text, enabled, created_at
-            FROM hooks
-            ORDER BY created_at DESC
+        if (enabledOnly) {
+            return await this.sql`
+                SELECT id, text, enabled, created_at FROM hooks WHERE enabled = TRUE ORDER BY created_at DESC
+            ` as DbHook[];
+        }
+        return await this.sql`
+            SELECT id, text, enabled, created_at FROM hooks ORDER BY created_at DESC
         ` as DbHook[];
-        return result;
+    }
+
+    /**
+     * Get all captions with their account assignments
+     */
+    async getAllCaptionsWithAccounts(enabledOnly: boolean = false, accountId?: number): Promise<DbCaptionWithAccounts[]> {
+        let rows;
+        if (accountId !== undefined) {
+            if (enabledOnly) {
+                rows = await this.sql`
+                    SELECT c.id, c.text, c.enabled, c.created_at,
+                        COALESCE(json_agg(json_build_object('id', a.id, 'name', a.name) ORDER BY a.id) FILTER (WHERE a.id IS NOT NULL), '[]'::json) as accounts
+                    FROM captions c
+                    JOIN account_captions ac2 ON ac2.caption_id = c.id AND ac2.account_id = ${accountId}
+                    LEFT JOIN account_captions ac ON ac.caption_id = c.id
+                    LEFT JOIN accounts a ON a.id = ac.account_id
+                    WHERE c.enabled = TRUE
+                    GROUP BY c.id, c.text, c.enabled, c.created_at
+                    ORDER BY c.created_at DESC
+                `;
+            } else {
+                rows = await this.sql`
+                    SELECT c.id, c.text, c.enabled, c.created_at,
+                        COALESCE(json_agg(json_build_object('id', a.id, 'name', a.name) ORDER BY a.id) FILTER (WHERE a.id IS NOT NULL), '[]'::json) as accounts
+                    FROM captions c
+                    JOIN account_captions ac2 ON ac2.caption_id = c.id AND ac2.account_id = ${accountId}
+                    LEFT JOIN account_captions ac ON ac.caption_id = c.id
+                    LEFT JOIN accounts a ON a.id = ac.account_id
+                    GROUP BY c.id, c.text, c.enabled, c.created_at
+                    ORDER BY c.created_at DESC
+                `;
+            }
+        } else {
+            if (enabledOnly) {
+                rows = await this.sql`
+                    SELECT c.id, c.text, c.enabled, c.created_at,
+                        COALESCE(json_agg(json_build_object('id', a.id, 'name', a.name) ORDER BY a.id) FILTER (WHERE a.id IS NOT NULL), '[]'::json) as accounts
+                    FROM captions c
+                    LEFT JOIN account_captions ac ON ac.caption_id = c.id
+                    LEFT JOIN accounts a ON a.id = ac.account_id
+                    WHERE c.enabled = TRUE
+                    GROUP BY c.id, c.text, c.enabled, c.created_at
+                    ORDER BY c.created_at DESC
+                `;
+            } else {
+                rows = await this.sql`
+                    SELECT c.id, c.text, c.enabled, c.created_at,
+                        COALESCE(json_agg(json_build_object('id', a.id, 'name', a.name) ORDER BY a.id) FILTER (WHERE a.id IS NOT NULL), '[]'::json) as accounts
+                    FROM captions c
+                    LEFT JOIN account_captions ac ON ac.caption_id = c.id
+                    LEFT JOIN accounts a ON a.id = ac.account_id
+                    GROUP BY c.id, c.text, c.enabled, c.created_at
+                    ORDER BY c.created_at DESC
+                `;
+            }
+        }
+        return (rows as any[]).map(row => ({
+            id: row.id,
+            text: row.text,
+            enabled: row.enabled,
+            created_at: row.created_at,
+            accounts: typeof row.accounts === 'string' ? JSON.parse(row.accounts) : row.accounts,
+        }));
+    }
+
+    /**
+     * Get all hooks with their account assignments
+     */
+    async getAllHooksWithAccounts(enabledOnly: boolean = false, accountId?: number): Promise<DbHookWithAccounts[]> {
+        let rows;
+        if (accountId !== undefined) {
+            if (enabledOnly) {
+                rows = await this.sql`
+                    SELECT h.id, h.text, h.enabled, h.created_at,
+                        COALESCE(json_agg(json_build_object('id', a.id, 'name', a.name) ORDER BY a.id) FILTER (WHERE a.id IS NOT NULL), '[]'::json) as accounts
+                    FROM hooks h
+                    JOIN account_hooks ah2 ON ah2.hook_id = h.id AND ah2.account_id = ${accountId}
+                    LEFT JOIN account_hooks ah ON ah.hook_id = h.id
+                    LEFT JOIN accounts a ON a.id = ah.account_id
+                    WHERE h.enabled = TRUE
+                    GROUP BY h.id, h.text, h.enabled, h.created_at
+                    ORDER BY h.created_at DESC
+                `;
+            } else {
+                rows = await this.sql`
+                    SELECT h.id, h.text, h.enabled, h.created_at,
+                        COALESCE(json_agg(json_build_object('id', a.id, 'name', a.name) ORDER BY a.id) FILTER (WHERE a.id IS NOT NULL), '[]'::json) as accounts
+                    FROM hooks h
+                    JOIN account_hooks ah2 ON ah2.hook_id = h.id AND ah2.account_id = ${accountId}
+                    LEFT JOIN account_hooks ah ON ah.hook_id = h.id
+                    LEFT JOIN accounts a ON a.id = ah.account_id
+                    GROUP BY h.id, h.text, h.enabled, h.created_at
+                    ORDER BY h.created_at DESC
+                `;
+            }
+        } else {
+            if (enabledOnly) {
+                rows = await this.sql`
+                    SELECT h.id, h.text, h.enabled, h.created_at,
+                        COALESCE(json_agg(json_build_object('id', a.id, 'name', a.name) ORDER BY a.id) FILTER (WHERE a.id IS NOT NULL), '[]'::json) as accounts
+                    FROM hooks h
+                    LEFT JOIN account_hooks ah ON ah.hook_id = h.id
+                    LEFT JOIN accounts a ON a.id = ah.account_id
+                    WHERE h.enabled = TRUE
+                    GROUP BY h.id, h.text, h.enabled, h.created_at
+                    ORDER BY h.created_at DESC
+                `;
+            } else {
+                rows = await this.sql`
+                    SELECT h.id, h.text, h.enabled, h.created_at,
+                        COALESCE(json_agg(json_build_object('id', a.id, 'name', a.name) ORDER BY a.id) FILTER (WHERE a.id IS NOT NULL), '[]'::json) as accounts
+                    FROM hooks h
+                    LEFT JOIN account_hooks ah ON ah.hook_id = h.id
+                    LEFT JOIN accounts a ON a.id = ah.account_id
+                    GROUP BY h.id, h.text, h.enabled, h.created_at
+                    ORDER BY h.created_at DESC
+                `;
+            }
+        }
+        return (rows as any[]).map(row => ({
+            id: row.id,
+            text: row.text,
+            enabled: row.enabled,
+            created_at: row.created_at,
+            accounts: typeof row.accounts === 'string' ? JSON.parse(row.accounts) : row.accounts,
+        }));
+    }
+
+    async assignCaptionsToAccount(accountId: number, captionIds: number[]): Promise<void> {
+        for (const captionId of captionIds) {
+            await this.sql`
+                INSERT INTO account_captions (account_id, caption_id)
+                VALUES (${accountId}, ${captionId})
+                ON CONFLICT DO NOTHING
+            `;
+        }
+    }
+
+    async removeCaptionFromAccount(accountId: number, captionId: number): Promise<boolean> {
+        const result = await this.sql`
+            DELETE FROM account_captions
+            WHERE account_id = ${accountId} AND caption_id = ${captionId}
+            RETURNING account_id
+        ` as { account_id: number }[];
+        return result.length > 0;
+    }
+
+    async assignHooksToAccount(accountId: number, hookIds: number[]): Promise<void> {
+        for (const hookId of hookIds) {
+            await this.sql`
+                INSERT INTO account_hooks (account_id, hook_id)
+                VALUES (${accountId}, ${hookId})
+                ON CONFLICT DO NOTHING
+            `;
+        }
+    }
+
+    async removeHookFromAccount(accountId: number, hookId: number): Promise<boolean> {
+        const result = await this.sql`
+            DELETE FROM account_hooks
+            WHERE account_id = ${accountId} AND hook_id = ${hookId}
+            RETURNING account_id
+        ` as { account_id: number }[];
+        return result.length > 0;
+    }
+
+    async assignHashtagCombinationsToAccount(accountId: number, combinationIds: number[]): Promise<void> {
+        for (const combinationId of combinationIds) {
+            await this.sql`
+                INSERT INTO account_hashtag_combinations (account_id, hashtag_combination_id)
+                VALUES (${accountId}, ${combinationId})
+                ON CONFLICT DO NOTHING
+            `;
+        }
+    }
+
+    async removeHashtagCombinationFromAccount(accountId: number, combinationId: number): Promise<boolean> {
+        const result = await this.sql`
+            DELETE FROM account_hashtag_combinations
+            WHERE account_id = ${accountId} AND hashtag_combination_id = ${combinationId}
+            RETURNING account_id
+        ` as { account_id: number }[];
+        return result.length > 0;
     }
 
     /**

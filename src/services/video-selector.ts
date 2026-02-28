@@ -7,14 +7,12 @@ import * as path from 'path';
 export class VideoSelectorService {
     private bucketName: string;
     private tempDir: string;
-    private projectId: string;
 
-    constructor() {
+    constructor(bucketName: string) {
         const config = getConfig();
 
-        this.bucketName = config.gcs.bucketName;
+        this.bucketName = bucketName;
         this.tempDir = config.tempDir;
-        this.projectId = config.gcs.projectId;
 
         // Ensure temp directory exists
         if (!fs.existsSync(this.tempDir)) {

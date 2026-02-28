@@ -168,13 +168,6 @@ await this.sql`
 Run: `bun run src/index.ts`
 Expected: Server starts, logs "Database schema initialized" without errors. Ctrl+C to stop.
 
-**Step 7: Commit**
-
-```bash
-git add src/services/database.ts src/types/index.ts
-git commit -m "feat: add account credentials columns and junction tables for multi-account"
-```
-
 ---
 
 ### Task 2: Account CRUD — Database methods
@@ -279,13 +272,6 @@ async deleteAccount(id: number): Promise<{ deleted: boolean; error?: string }> {
 }
 ```
 
-**Step 6: Commit**
-
-```bash
-git add src/services/database.ts
-git commit -m "feat: add account CRUD database methods"
-```
-
 ---
 
 ### Task 3: Junction table management — Database methods
@@ -354,13 +340,6 @@ async removeHashtagCombinationFromAccount(accountId: number, combinationId: numb
     ` as { account_id: number }[];
     return result.length > 0;
 }
-```
-
-**Step 2: Commit**
-
-```bash
-git add src/services/database.ts
-git commit -m "feat: add junction table management methods for content-account assignment"
 ```
 
 ---
@@ -492,13 +471,6 @@ async getAllHooks(enabledOnly: boolean = false, accountId?: number): Promise<DbH
 }
 ```
 
-**Step 6: Commit**
-
-```bash
-git add src/services/database.ts
-git commit -m "feat: add account-scoped content queries with junction table joins"
-```
-
 ---
 
 ### Task 5: Update Config — Remove per-account env vars from config
@@ -569,13 +541,6 @@ export interface Config {
         apiKey: string;
     };
 }
-```
-
-**Step 3: Commit**
-
-```bash
-git add src/config/index.ts src/types/index.ts
-git commit -m "feat: remove per-account env vars from config, credentials now in DB"
 ```
 
 ---
@@ -679,13 +644,6 @@ async getMediaInsights(mediaId: string): Promise<number> {
         // ... rest unchanged, just remove accountId from parameter list
 ```
 
-**Step 3: Commit**
-
-```bash
-git add src/services/instagram-client.ts
-git commit -m "feat: refactor InstagramClient to accept credentials per-instance from DB"
-```
-
 ---
 
 ### Task 7: Update VideoSelectorService — Parameterized bucket name
@@ -718,13 +676,6 @@ export class VideoSelectorService {
 Remove `this.projectId` since it's no longer used anywhere in the service (the GCS public API doesn't need project ID).
 
 Also remove the `import { getConfig } from '../config/index.js';` if config is only used for tempDir. Actually, keep it for `tempDir`.
-
-**Step 2: Commit**
-
-```bash
-git add src/services/video-selector.ts
-git commit -m "feat: parameterize VideoSelectorService bucket name from account config"
-```
 
 ---
 
@@ -878,13 +829,6 @@ Add the import for DbAccount at top of file:
 import type { PostReelResponse, DbAccount } from '../types/index.js';
 ```
 
-**Step 5: Commit**
-
-```bash
-git add src/routes/post-reel.ts src/utils/validation.ts src/types/index.ts
-git commit -m "feat: post-reel fetches account from DB, passes credentials to services"
-```
-
 ---
 
 ### Task 9: Update videos route — Account-scoped bucket listing
@@ -953,13 +897,6 @@ export async function handleVideos(request: Request): Promise<Response> {
         );
     }
 }
-```
-
-**Step 2: Commit**
-
-```bash
-git add src/routes/videos.ts
-git commit -m "feat: videos endpoint requires accountId, uses account's GCS bucket"
 ```
 
 ---
@@ -1035,13 +972,6 @@ export async function handleTestInstagram(request: Request): Promise<Response> {
         );
     }
 }
-```
-
-**Step 2: Commit**
-
-```bash
-git add src/routes/test-instagram.ts
-git commit -m "feat: test-instagram loads credentials from DB, supports accountId filter"
 ```
 
 ---
@@ -1146,13 +1076,6 @@ export class ViewsSyncCronService {
 }
 ```
 
-**Step 2: Commit**
-
-```bash
-git add src/services/views-sync-cron.ts
-git commit -m "feat: views sync uses per-account credentials from DB"
-```
-
 ---
 
 ### Task 12: Update stats route — Remove hardcoded accountId validation
@@ -1174,13 +1097,6 @@ if (accountIdParam !== null) {
         );
     }
 }
-```
-
-**Step 2: Commit**
-
-```bash
-git add src/routes/stats.ts
-git commit -m "feat: stats endpoint accepts any valid accountId, not just 1 or 2"
 ```
 
 ---
@@ -1478,13 +1394,6 @@ Update CORS allowed methods to include DELETE:
 'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
 ```
 
-**Step 3: Commit**
-
-```bash
-git add src/routes/accounts.ts src/index.ts
-git commit -m "feat: add account CRUD and content assignment API routes"
-```
-
 ---
 
 ### Task 14: Update captions and hooks routes — Add accountId filtering and optional assignment on create
@@ -1579,13 +1488,6 @@ if (parsed.data.accountIds && parsed.data.accountIds.length > 0) {
 }
 ```
 
-**Step 4: Commit**
-
-```bash
-git add src/routes/captions.ts src/routes/hooks.ts
-git commit -m "feat: captions and hooks routes support accountId filtering and assignment on create"
-```
-
 ---
 
 ### Task 15: Compile and verify
@@ -1599,13 +1501,6 @@ Expected: No errors. Fix any type errors found.
 
 Run: `bun run src/index.ts`
 Expected: Server starts, schema initializes, cron jobs start. Ctrl+C to stop.
-
-**Step 3: Commit any fixes**
-
-```bash
-git add -A
-git commit -m "fix: resolve any type errors from multi-account refactor"
-```
 
 ---
 
@@ -1622,9 +1517,3 @@ Keep: `GCS_PROJECT_ID`, `DATABASE_URL`, `DASHBOARD_PASSWORD`, `NEON_JWKS_URL`, `
 
 Note: The existing env vars are still read during the seed migration (Task 1, Step 4) to populate the DB for the first time. After first run, they're no longer needed.
 
-**Step 2: Commit**
-
-```bash
-git add .env.example
-git commit -m "docs: update env example to reflect DB-managed account credentials"
-```

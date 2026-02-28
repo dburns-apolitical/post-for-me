@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 const createCaptionSchema = z.object({
     text: z.string().min(1, 'Caption text cannot be empty').max(2200, 'Caption text too long'),
+    accountIds: z.array(z.number().int().min(1)).optional(),
 });
 
 const updateCaptionSchema = z.object({
@@ -28,7 +29,9 @@ export async function handleCaptions(request: Request): Promise<Response> {
     try {
         if (request.method === 'GET') {
             const showAll = url.searchParams.get('all') === 'true';
-            const captions = await db.getAllCaptions(!showAll);
+            const accountIdParam = url.searchParams.get('accountId');
+            const accountId = accountIdParam ? parseInt(accountIdParam, 10) : undefined;
+            const captions = await db.getAllCaptionsWithAccounts(!showAll, accountId);
             return Response.json({ success: true, captions });
         }
 
@@ -47,6 +50,11 @@ export async function handleCaptions(request: Request): Promise<Response> {
                     { success: false, error: 'A caption with this text already exists' },
                     { status: 409 }
                 );
+            }
+            if (parsed.data.accountIds && parsed.data.accountIds.length > 0) {
+                for (const accId of parsed.data.accountIds) {
+                    await db.assignCaptionsToAccount(accId, [caption.id]);
+                }
             }
             return Response.json({ success: true, caption }, { status: 201 });
         }

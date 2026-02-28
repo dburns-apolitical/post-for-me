@@ -3,7 +3,7 @@ export interface PostReelRequest {
     hookText?: string;
     hashtags?: string[];
     shareToFeed?: boolean;
-    accountId?: number;
+    accountId: number;
 }
 
 export interface PostReelResponse {
@@ -56,11 +56,6 @@ export interface Config {
     nodeEnv: string;
     gcs: {
         projectId: string;
-        bucketName: string;
-        keyFilePath: string;
-    };
-    instagram: {
-        accounts: Record<number, { accessToken: string; userId: string }>;
     };
     tempDir: string;
     databaseUrl: string;
@@ -97,6 +92,19 @@ export interface DbHook {
     created_at: Date;
 }
 
+export interface ContentAccount {
+    id: number;
+    name: string;
+}
+
+export interface DbCaptionWithAccounts extends DbCaption {
+    accounts: ContentAccount[];
+}
+
+export interface DbHookWithAccounts extends DbHook {
+    accounts: ContentAccount[];
+}
+
 export interface DbHashtagCombination {
     id: number;
     hashtag1_id: number;
@@ -116,6 +124,9 @@ export interface DbVideo {
 export interface DbAccount {
     id: number;
     name: string;
+    ig_access_token: string;
+    ig_user_id: string;
+    gcs_bucket_name: string;
     created_at: Date;
 }
 

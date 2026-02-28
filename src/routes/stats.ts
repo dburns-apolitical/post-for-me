@@ -35,9 +35,9 @@ export async function handleStats(request: Request): Promise<Response> {
 
         if (accountIdParam !== null) {
             accountId = parseInt(accountIdParam, 10);
-            if (isNaN(accountId) || (accountId !== 1 && accountId !== 2)) {
+            if (isNaN(accountId) || accountId < 1) {
                 return Response.json(
-                    { success: false, error: 'accountId must be 1 or 2' },
+                    { success: false, error: 'accountId must be a positive integer' },
                     { status: 400 }
                 );
             }

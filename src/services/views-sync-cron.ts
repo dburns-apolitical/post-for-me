@@ -5,34 +5,25 @@ import { logger } from '../utils/logger.js';
 export class ViewsSyncCronService {
     private timer: Timer | null = null;
     private db: DatabaseService;
-    private instagram: InstagramClientService;
     private isRunning: boolean = false;
 
-    // 24 hours in milliseconds
     private static readonly INTERVAL_MS = 24 * 60 * 60 * 1000;
 
     constructor() {
         this.db = new DatabaseService();
-        this.instagram = new InstagramClientService();
     }
 
-    /**
-     * Start the daily views sync cron job
-     * Runs once per day (every 24 hours)
-     */
     start(): void {
         if (this.timer) {
             logger.warn('Views sync cron job already running');
             return;
         }
 
-        // Calculate milliseconds until next midnight UTC
         const now = new Date();
         const nextMidnight = new Date(now);
         nextMidnight.setUTCHours(24, 0, 0, 0);
         const msUntilMidnight = nextMidnight.getTime() - now.getTime();
 
-        // Schedule first run at midnight UTC, then repeat every 24 hours
         setTimeout(() => {
             this.runAndScheduleNext();
         }, msUntilMidnight);
@@ -43,21 +34,14 @@ export class ViewsSyncCronService {
         });
     }
 
-    /**
-     * Run sync and schedule the next one
-     */
     private runAndScheduleNext(): void {
         this.syncViews().finally(() => {
-            // Schedule next run in 24 hours
             this.timer = setTimeout(() => {
                 this.runAndScheduleNext();
             }, ViewsSyncCronService.INTERVAL_MS);
         });
     }
 
-    /**
-     * Stop the cron job
-     */
     stop(): void {
         if (this.timer) {
             clearTimeout(this.timer);
@@ -66,10 +50,6 @@ export class ViewsSyncCronService {
         }
     }
 
-    /**
-     * Sync views for all eligible posts
-     * Can also be called manually for testing
-     */
     async syncViews(): Promise<{ updated: number; failed: number }> {
         if (this.isRunning) {
             logger.warn('Views sync already in progress, skipping');
@@ -92,6 +72,10 @@ export class ViewsSyncCronService {
 
             logger.info('Found posts needing views update', { count: posts.length });
 
+            // Load all accounts for credential lookup
+            const accounts = await this.db.getAccounts();
+            const accountMap = new Map(accounts.map(a => [a.id, a]));
+
             for (const post of posts) {
                 try {
                     if (!post.instagram_post_id) {
@@ -100,7 +84,15 @@ export class ViewsSyncCronService {
                         continue;
                     }
 
-                    const views = await this.instagram.getMediaInsights(post.account_id, post.instagram_post_id);
+                    const account = accountMap.get(post.account_id);
+                    if (!account) {
+                        logger.warn('Account not found for post, skipping', { postId: post.id, accountId: post.account_id });
+                        failed++;
+                        continue;
+                    }
+
+                    const instagram = new InstagramClientService(account.ig_access_token, account.ig_user_id);
+                    const views = await instagram.getMediaInsights(post.instagram_post_id);
                     await this.db.updatePostViews(post.id, views);
 
                     logger.info('Updated views for post', {
@@ -113,7 +105,6 @@ export class ViewsSyncCronService {
                 } catch (error) {
                     logger.error('Failed to update views for post', {
                         postId: post.id,
-                        instagramPostId: post.instagram_post_id,
                         error: error instanceof Error ? error.message : 'Unknown error',
                     });
                     failed++;

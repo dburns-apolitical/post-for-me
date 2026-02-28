@@ -1,7 +1,7 @@
 import { logger } from '../utils/logger.js';
 import { validatePostReelRequest } from '../utils/validation.js';
 import { validateAuth, unauthorizedResponse, forbiddenResponse } from '../utils/auth.js';
-import type { PostReelResponse } from '../types/index.js';
+import type { PostReelResponse, DbAccount } from '../types/index.js';
 import { VideoSelectorService } from '../services/video-selector.js';
 import { VideoEditorService } from '../services/video-editor.js';
 import { InstagramClientService } from '../services/instagram-client.js';
@@ -13,7 +13,7 @@ import { DatabaseService } from '../services/database.js';
  */
 async function processPostInBackground(
     postId: number,
-    accountId: number,
+    account: DbAccount,
     inputVideoPath: string,
     hookText: string,
     caption: string,
@@ -25,9 +25,9 @@ async function processPostInBackground(
 ): Promise<void> {
     let editedVideoPath: string | null = null;
     let editedVideoUrl: string | null = null;
-    const videoSelector = new VideoSelectorService();
+    const videoSelector = new VideoSelectorService(account.gcs_bucket_name);
     const videoEditor = new VideoEditorService();
-    const instagramClient = new InstagramClientService();
+    const instagramClient = new InstagramClientService(account.ig_access_token, account.ig_user_id);
 
     try {
         // Step 3: Validate video format
@@ -60,7 +60,6 @@ async function processPostInBackground(
         // Step 6: Post to Instagram
         logger.info('Step 6: Posting Reel to Instagram', { postId });
         const instagramPost = await instagramClient.postReel(
-            accountId,
             editedVideoUrl,
             caption,
             hashtags,
@@ -172,16 +171,25 @@ export async function handlePostReel(request: Request): Promise<Response> {
             );
         }
 
-        // Initialize video selector service
-        const videoSelector = new VideoSelectorService();
-
         // Get values from request or auto-select from database
         let { caption, hookText, hashtags, shareToFeed } = validation.data;
-        const accountId = validation.data.accountId ?? 2;
+        const accountId = validation.data.accountId;
+
+        // Fetch account from DB
+        const account = await db.getAccount(accountId);
+        if (!account) {
+            return Response.json(
+                { success: false, error: `Account ${accountId} not found` },
+                { status: 404 }
+            );
+        }
+
+        // Initialize video selector service
+        const videoSelector = new VideoSelectorService(account.gcs_bucket_name);
 
         // Auto-select caption from database if not provided
         if (!caption) {
-            const dbCaption = await db.getRandomCaption();
+            const dbCaption = await db.getRandomCaption(accountId);
             if (!dbCaption) {
                 return Response.json(
                     {
@@ -197,7 +205,7 @@ export async function handlePostReel(request: Request): Promise<Response> {
 
         // Auto-select hookText from database if not provided
         if (!hookText) {
-            const dbHook = await db.getRandomHook();
+            const dbHook = await db.getRandomHook(accountId);
             if (!dbHook) {
                 return Response.json(
                     {
@@ -213,7 +221,7 @@ export async function handlePostReel(request: Request): Promise<Response> {
 
         // Auto-select hashtags from database if not provided (default 5)
         if (!hashtags || hashtags.length === 0) {
-            const dbHashtags = await db.getRandomHashtags(5);
+            const dbHashtags = await db.getRandomHashtags(accountId, 5);
             if (dbHashtags.length === 0) {
                 return Response.json(
                     {
@@ -313,7 +321,7 @@ export async function handlePostReel(request: Request): Promise<Response> {
         setImmediate(() => {
             processPostInBackground(
                 post.id,
-                accountId,
+                account,
                 localPath,
                 hookText,
                 caption,

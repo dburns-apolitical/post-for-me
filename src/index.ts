@@ -10,6 +10,7 @@ import { handleVideos } from './routes/videos.js';
 import { handleSyncViews } from './routes/sync-views.js';
 import { handleRunEvaluation } from './routes/run-evaluation.js';
 import { handleEvaluations } from './routes/evaluations.js';
+import { handleAccounts, handleAccountById, handleAccountContent } from './routes/accounts.js';
 import { DatabaseService } from './services/database.js';
 import { ViewsSyncCronService } from './services/views-sync-cron.js';
 import { AgentEvalCronService } from './services/agent-eval-cron.js';
@@ -150,7 +151,7 @@ const ALLOWED_ORIGINS = [
 function getCorsHeaders(request: Request): Record<string, string> {
   const origin = request.headers.get('Origin');
   const headers: Record<string, string> = {
-    'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Dashboard-Password',
     'Access-Control-Max-Age': '86400',
   };
@@ -255,6 +256,32 @@ startup().then(() => {
 
       if (url.pathname === '/api/run-evaluation' && request.method === 'POST') {
         return withCors(await handleRunEvaluation(request), request);
+      }
+
+      // Accounts CRUD
+      if (url.pathname === '/api/accounts' && (request.method === 'GET' || request.method === 'POST')) {
+        return withCors(await handleAccounts(request), request);
+      }
+
+      const accountByIdMatch = url.pathname.match(/^\/api\/accounts\/(\d+)$/);
+      if (accountByIdMatch && (request.method === 'PATCH' || request.method === 'DELETE')) {
+        return withCors(await handleAccountById(request, parseInt(accountByIdMatch[1], 10)), request);
+      }
+
+      // Account content assignment
+      const accountContentMatch = url.pathname.match(/^\/api\/accounts\/(\d+)\/(captions|hooks|hashtag-combinations)$/);
+      if (accountContentMatch && request.method === 'POST') {
+        return withCors(await handleAccountContent(request, parseInt(accountContentMatch[1], 10), accountContentMatch[2]), request);
+      }
+
+      const accountContentItemMatch = url.pathname.match(/^\/api\/accounts\/(\d+)\/(captions|hooks|hashtag-combinations)\/(\d+)$/);
+      if (accountContentItemMatch && request.method === 'DELETE') {
+        return withCors(await handleAccountContent(
+          request,
+          parseInt(accountContentItemMatch[1], 10),
+          accountContentItemMatch[2],
+          parseInt(accountContentItemMatch[3], 10)
+        ), request);
       }
 
       // 404 for unknown routes

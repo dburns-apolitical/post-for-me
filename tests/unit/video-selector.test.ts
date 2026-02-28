@@ -33,7 +33,7 @@ describe('VideoSelectorService', () => {
 
   describe('cleanupTempFile', () => {
     test('should skip cleanup in development mode', () => {
-      const service = new VideoSelectorService();
+      const service = new VideoSelectorService('test-bucket');
       const testFile = './tmp/test-cleanup-dev.txt';
 
       // Create a test file
@@ -67,7 +67,7 @@ describe('VideoSelectorService', () => {
       process.env.DATABASE_URL = 'postgresql://test:test@localhost/test';
 
       try {
-        const service = new VideoSelectorService();
+        const service = new VideoSelectorService('test-bucket');
         const testFile = './tmp/test-cleanup-prod.txt';
 
         // Create a test file
@@ -92,7 +92,7 @@ describe('VideoSelectorService', () => {
     });
 
     test('should not throw error if file does not exist', () => {
-      const service = new VideoSelectorService();
+      const service = new VideoSelectorService('test-bucket');
 
       // Should not throw
       expect(() => {
@@ -103,7 +103,7 @@ describe('VideoSelectorService', () => {
 
   describe('deleteEditedVideo', () => {
     test('should call DELETE on the correct GCS API URL', async () => {
-      const service = new VideoSelectorService();
+      const service = new VideoSelectorService('test-bucket');
 
       const originalFetch = global.fetch;
       const mockFetchFn = mock(() => Promise.resolve({
@@ -125,7 +125,7 @@ describe('VideoSelectorService', () => {
     });
 
     test('should handle 404 gracefully (already deleted)', async () => {
-      const service = new VideoSelectorService();
+      const service = new VideoSelectorService('test-bucket');
 
       const originalFetch = global.fetch;
       global.fetch = mock(() => Promise.resolve({
@@ -142,7 +142,7 @@ describe('VideoSelectorService', () => {
     });
 
     test('should handle mismatched URL gracefully', async () => {
-      const service = new VideoSelectorService();
+      const service = new VideoSelectorService('test-bucket');
 
       const originalFetch = global.fetch;
       const mockFetchFn = mock(() => Promise.resolve({
@@ -160,7 +160,7 @@ describe('VideoSelectorService', () => {
     });
 
     test('should handle API errors gracefully without throwing', async () => {
-      const service = new VideoSelectorService();
+      const service = new VideoSelectorService('test-bucket');
 
       const originalFetch = global.fetch;
       global.fetch = mock(() => Promise.resolve({
@@ -180,7 +180,7 @@ describe('VideoSelectorService', () => {
 
   describe('listAllVideoNames', () => {
     test('should return array of video filenames', async () => {
-      const service = new VideoSelectorService();
+      const service = new VideoSelectorService('test-bucket');
 
       // Mock fetch for GCS API
       const originalFetch = global.fetch;
@@ -208,7 +208,7 @@ describe('VideoSelectorService', () => {
     });
 
     test('should return empty array when no videos', async () => {
-      const service = new VideoSelectorService();
+      const service = new VideoSelectorService('test-bucket');
 
       const originalFetch = global.fetch;
       global.fetch = mock(() => Promise.resolve({
@@ -227,7 +227,7 @@ describe('VideoSelectorService', () => {
 
   describe('findVideoByTitle', () => {
     test('should return video when title matches exactly', async () => {
-      const service = new VideoSelectorService();
+      const service = new VideoSelectorService('test-bucket');
 
       const originalFetch = global.fetch;
       global.fetch = mock(() => Promise.resolve({
@@ -251,7 +251,7 @@ describe('VideoSelectorService', () => {
     });
 
     test('should return null when title does not match', async () => {
-      const service = new VideoSelectorService();
+      const service = new VideoSelectorService('test-bucket');
 
       const originalFetch = global.fetch;
       global.fetch = mock(() => Promise.resolve({
@@ -274,7 +274,7 @@ describe('VideoSelectorService', () => {
     });
 
     test('should be case-sensitive (exact match only)', async () => {
-      const service = new VideoSelectorService();
+      const service = new VideoSelectorService('test-bucket');
 
       const originalFetch = global.fetch;
       global.fetch = mock(() => Promise.resolve({

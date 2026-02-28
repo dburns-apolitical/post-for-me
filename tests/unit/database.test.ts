@@ -211,7 +211,7 @@ describe('DatabaseService', () => {
             const mockCaption = { id: 1, text: 'Random caption', enabled: true, created_at: new Date() };
             mockSql.mockResolvedValueOnce([mockCaption]);
 
-            const result = await db.getRandomCaption();
+            const result = await db.getRandomCaption(1);
 
             expect(result).toEqual(mockCaption);
         });
@@ -219,7 +219,7 @@ describe('DatabaseService', () => {
         test('should return null when no captions', async () => {
             mockSql.mockResolvedValueOnce([]);
 
-            const result = await db.getRandomCaption();
+            const result = await db.getRandomCaption(1);
 
             expect(result).toBeNull();
         });
@@ -230,7 +230,7 @@ describe('DatabaseService', () => {
             const mockHook = { id: 1, text: 'Random hook', enabled: true, created_at: new Date() };
             mockSql.mockResolvedValueOnce([mockHook]);
 
-            const result = await db.getRandomHook();
+            const result = await db.getRandomHook(1);
 
             expect(result).toEqual(mockHook);
         });
@@ -238,7 +238,7 @@ describe('DatabaseService', () => {
         test('should return null when no hooks', async () => {
             mockSql.mockResolvedValueOnce([]);
 
-            const result = await db.getRandomHook();
+            const result = await db.getRandomHook(1);
 
             expect(result).toBeNull();
         });
@@ -295,8 +295,8 @@ describe('DatabaseService', () => {
     describe('getAccounts', () => {
         test('should return all accounts', async () => {
             const mockAccounts = [
-                { id: 1, name: 'Molars UK (MAIN ACCOUNT)', created_at: new Date() },
-                { id: 2, name: 'MLRSUK (BACKUP ACCOUNT)', created_at: new Date() },
+                { id: 1, name: 'Molars UK (MAIN ACCOUNT)', ig_access_token: 'token1', ig_user_id: 'user1', gcs_bucket_name: 'bucket1', created_at: new Date() },
+                { id: 2, name: 'MLRSUK (BACKUP ACCOUNT)', ig_access_token: 'token2', ig_user_id: 'user2', gcs_bucket_name: 'bucket2', created_at: new Date() },
             ];
             mockSql.mockResolvedValueOnce(mockAccounts);
 

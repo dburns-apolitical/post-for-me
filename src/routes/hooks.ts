@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 const createHookSchema = z.object({
     text: z.string().min(1, 'Hook text cannot be empty').max(500, 'Hook text too long'),
+    accountIds: z.array(z.number().int().min(1)).optional(),
 });
 
 const updateHookSchema = z.object({
@@ -28,7 +29,9 @@ export async function handleHooks(request: Request): Promise<Response> {
     try {
         if (request.method === 'GET') {
             const showAll = url.searchParams.get('all') === 'true';
-            const hooks = await db.getAllHooks(!showAll);
+            const accountIdParam = url.searchParams.get('accountId');
+            const accountId = accountIdParam ? parseInt(accountIdParam, 10) : undefined;
+            const hooks = await db.getAllHooksWithAccounts(!showAll, accountId);
             return Response.json({ success: true, hooks });
         }
 
@@ -47,6 +50,11 @@ export async function handleHooks(request: Request): Promise<Response> {
                     { success: false, error: 'A hook with this text already exists' },
                     { status: 409 }
                 );
+            }
+            if (parsed.data.accountIds && parsed.data.accountIds.length > 0) {
+                for (const accId of parsed.data.accountIds) {
+                    await db.assignHooksToAccount(accId, [hook.id]);
+                }
             }
             return Response.json({ success: true, hook }, { status: 201 });
         }
