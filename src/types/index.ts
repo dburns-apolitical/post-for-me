@@ -223,3 +223,16 @@ export interface AgentEvaluation {
     triggered_by: string;
     created_at: Date;
 }
+
+export interface DailyViewsEntry {
+    day: string;
+    views: number;
+}
+
+export interface ViewsHistoryResponse {
+    success: boolean;
+    dailyViews: DailyViewsEntry[];
+    last28DaysTotal: number;
+    previous28DaysTotal: number;
+    deltaPercent: number | null;
+}
