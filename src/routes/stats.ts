@@ -49,7 +49,6 @@ export async function handleStats(request: Request): Promise<Response> {
         // Execute all queries in parallel for better performance
         const [
             topPostsResult,
-            mostRecentPostResult,
             viewsMetricsResult,
             postCountMetricsResult,
             topCaptionsResult,
@@ -61,7 +60,6 @@ export async function handleStats(request: Request): Promise<Response> {
             latestEvaluationResult,
         ] = await Promise.all([
             getTopPosts(sql, accountId),
-            getMostRecentPost(sql, accountId),
             getViewsMetrics(sql, accountId),
             getPostCountMetrics(sql, accountId),
             getTopCaptions(sql, accountId),
@@ -75,7 +73,6 @@ export async function handleStats(request: Request): Promise<Response> {
 
         const stats: DashboardStats = {
             topPosts: topPostsResult,
-            mostRecentPost: mostRecentPostResult,
             viewsMetrics: viewsMetricsResult,
             postCountMetrics: postCountMetricsResult,
             topCaptions: topCaptionsResult,
@@ -156,54 +153,6 @@ async function getTopPosts(sql: NeonSQL, accountId: number | null): Promise<Post
         ` as RawPostRow[];
 
     return rows.map(mapPostRow);
-}
-
-/**
- * Get most recent post with all joined fields
- */
-async function getMostRecentPost(sql: NeonSQL, accountId: number | null): Promise<PostWithDetails | null> {
-    const rows = accountId !== null
-        ? await sql`
-            SELECT
-                p.id, p.instagram_post_id, p.views, p.status, p.created_at, p.updated_at,
-                v.id as video_id, v.title as video_title,
-                h.id as hook_id, h.text as hook_text,
-                c.id as caption_id, c.text as caption_text,
-                a.name as account_name,
-                COALESCE(ARRAY_AGG(ht.text ORDER BY ht.id) FILTER (WHERE ht.text IS NOT NULL), ARRAY[]::text[]) as hashtags
-            FROM posts p
-            JOIN videos v ON p.video_id = v.id
-            JOIN hooks h ON p.hook_id = h.id
-            JOIN captions c ON p.caption_id = c.id
-            JOIN accounts a ON p.account_id = a.id
-            JOIN hashtag_combinations hc ON p.hashtag_combination_id = hc.id
-            LEFT JOIN hashtags ht ON ht.id IN (hc.hashtag1_id, hc.hashtag2_id, hc.hashtag3_id, hc.hashtag4_id, hc.hashtag5_id)
-            WHERE p.account_id = ${accountId}
-            GROUP BY p.id, v.id, v.title, h.id, h.text, c.id, c.text, a.name
-            ORDER BY p.created_at DESC
-            LIMIT 1
-        ` as RawPostRow[]
-        : await sql`
-            SELECT
-                p.id, p.instagram_post_id, p.views, p.status, p.created_at, p.updated_at,
-                v.id as video_id, v.title as video_title,
-                h.id as hook_id, h.text as hook_text,
-                c.id as caption_id, c.text as caption_text,
-                a.name as account_name,
-                COALESCE(ARRAY_AGG(ht.text ORDER BY ht.id) FILTER (WHERE ht.text IS NOT NULL), ARRAY[]::text[]) as hashtags
-            FROM posts p
-            JOIN videos v ON p.video_id = v.id
-            JOIN hooks h ON p.hook_id = h.id
-            JOIN captions c ON p.caption_id = c.id
-            JOIN accounts a ON p.account_id = a.id
-            JOIN hashtag_combinations hc ON p.hashtag_combination_id = hc.id
-            LEFT JOIN hashtags ht ON ht.id IN (hc.hashtag1_id, hc.hashtag2_id, hc.hashtag3_id, hc.hashtag4_id, hc.hashtag5_id)
-            GROUP BY p.id, v.id, v.title, h.id, h.text, c.id, c.text, a.name
-            ORDER BY p.created_at DESC
-            LIMIT 1
-        ` as RawPostRow[];
-
-    return rows.length > 0 ? mapPostRow(rows[0]) : null;
 }
 
 /**
