@@ -5,6 +5,7 @@ import { handlePostStatus } from './routes/post-status.js';
 import { handleTestInstagram } from './routes/test-instagram.js';
 import { handleStats } from './routes/stats.js';
 import { handleViewsHistory } from './routes/views-history.js';
+import { handleRecentPosts } from './routes/recent-posts.js';
 import { handleBackfillDailyViews } from './routes/backfill-daily-views.js';
 import { handleCaptions, handleCaptionById } from './routes/captions.js';
 import { handleHooks, handleHookById } from './routes/hooks.js';
@@ -222,6 +223,11 @@ startup().then(() => {
       // Views history endpoint (requires authentication)
       if (url.pathname === '/api/stats/views-history' && request.method === 'GET') {
         return withCors(await handleViewsHistory(request), request);
+      }
+
+      // Recent posts endpoint (requires authentication)
+      if (url.pathname === '/api/stats/recent-posts' && request.method === 'GET') {
+        return withCors(await handleRecentPosts(request), request);
       }
 
       // Captions endpoint (requires authentication)
