@@ -301,6 +301,21 @@ export class DatabaseService {
             )
         `;
 
+        await this.sql`
+            CREATE TABLE IF NOT EXISTS daily_views (
+                id SERIAL PRIMARY KEY,
+                account_id INTEGER NOT NULL REFERENCES accounts(id),
+                day DATE NOT NULL,
+                views INTEGER NOT NULL,
+                post_count INTEGER NOT NULL,
+                UNIQUE(account_id, day)
+            )
+        `;
+
+        await this.sql`
+            CREATE INDEX IF NOT EXISTS idx_daily_views_day ON daily_views(day)
+        `;
+
         logger.info('Database schema initialized');
     }
 
@@ -1190,5 +1205,20 @@ export class DatabaseService {
             hashtags: row.hashtags || [],
             account_name: row.account_name,
         }));
+    }
+
+    /**
+     * Insert or update daily views aggregate for an account
+     * Uses ON CONFLICT to handle re-triggers on the same day (additive)
+     */
+    async insertDailyViews(accountId: number, day: Date, views: number, postCount: number): Promise<void> {
+        await this.sql`
+            INSERT INTO daily_views (account_id, day, views, post_count)
+            VALUES (${accountId}, ${day.toISOString().split('T')[0]}, ${views}, ${postCount})
+            ON CONFLICT (account_id, day)
+            DO UPDATE SET
+                views = daily_views.views + EXCLUDED.views,
+                post_count = daily_views.post_count + EXCLUDED.post_count
+        `;
     }
 }

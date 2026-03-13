@@ -486,4 +486,14 @@ describe('DatabaseService', () => {
             ).resolves.toBeUndefined();
         });
     });
+
+    describe('insertDailyViews', () => {
+        test('should insert daily views record', async () => {
+            mockSql.mockResolvedValueOnce([]);
+
+            await db.insertDailyViews(1, new Date('2026-03-13'), 500, 3);
+
+            expect(mockSql).toHaveBeenCalled();
+        });
+    });
 });
