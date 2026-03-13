@@ -21,15 +21,17 @@ CREATE TABLE IF NOT EXISTS daily_views (
     day DATE NOT NULL,
     views INTEGER NOT NULL,
     UNIQUE(account_id, day)
-)
+);
+CREATE INDEX IF NOT EXISTS idx_daily_views_day ON daily_views(day);
 ```
 
 - One row per account per sync run
 - `day` = the date the sync ran (CURRENT_DATE)
-- `views` = sum of views from posts synced in that run
+- `views` = sum of lifetime view counts from posts synced in that run. This is intentionally a snapshot of total views at sync time, not incremental daily views. The graph compares "which day's batch of synced posts performed better."
 - The UNIQUE constraint prevents duplicates if the cron runs twice or is manually triggered on the same day
 - Rows are immutable once written — past data never needs updating
 - Data is naturally ~2 days behind today (posts must be 2+ days old before sync)
+- On days with no posts to sync, no row is written. The frontend fills date gaps with zero values.
 
 ### Cron Integration
 
@@ -72,7 +74,7 @@ The totals and delta are computed server-side from the same dataset so the front
 
 **Route registration:** Add to `src/index.ts` router alongside existing `/api/stats`.
 
-**New file:** `src/routes/views-history.ts` — follows the same pattern as `src/routes/stats.ts` (auth check, query param parsing, neon query, response mapping).
+**New file:** `src/routes/views-history.ts` — follows the same pattern as `src/routes/stats.ts` (auth check, query param parsing, direct neon query, response mapping). Uses Neon driver directly in the route handler, consistent with `stats.ts`.
 
 ### Frontend
 
@@ -93,7 +95,7 @@ The totals and delta are computed server-side from the same dataset so the front
 **Summary stats below the chart:**
 - "Last period" (previous 28 days total) on the left
 - "This period" (last 28 days total) on the right
-- Delta percentage indicator using existing `DeltaIndicator` component
+- Delta percentage indicator — extract existing `DeltaIndicator` from `home.tsx` (currently a local function) into a shared component so `ViewsChart` can reuse it
 
 **Layout change:**
 - The existing 3 "Views Overview" cards are replaced by the new chart + summary stats
@@ -114,6 +116,7 @@ export interface DailyViewsEntry {
 }
 
 export interface ViewsHistoryResponse {
+    success: boolean;
     dailyViews: DailyViewsEntry[];
     last28DaysTotal: number;
     previous28DaysTotal: number;
@@ -142,7 +145,8 @@ export interface ViewsHistoryResponse {
 | `package.json` | Modify | Add `recharts` dependency |
 | `src/hooks/useViewsHistory.ts` | Create | New hook to fetch views history data |
 | `src/components/ViewsChart.tsx` | Create | New chart component |
-| `src/pages/home.tsx` | Modify | Replace Views Overview cards with ViewsChart, keep All Time Views card |
+| `src/components/DeltaIndicator.tsx` | Create | Extract `DeltaIndicator` from `home.tsx` into a shared component |
+| `src/pages/home.tsx` | Modify | Replace Views Overview cards with ViewsChart, keep All Time Views card, import DeltaIndicator from shared component |
 | `src/types/dashboard.ts` | Modify | Add frontend mirror types |
 
 ## Testing
