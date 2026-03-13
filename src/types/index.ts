@@ -227,6 +227,7 @@ export interface AgentEvaluation {
 export interface DailyViewsEntry {
     day: string;
     views: number;
+    postCount: number;
 }
 
 export interface ViewsHistoryResponse {

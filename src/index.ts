@@ -5,6 +5,7 @@ import { handlePostStatus } from './routes/post-status.js';
 import { handleTestInstagram } from './routes/test-instagram.js';
 import { handleStats } from './routes/stats.js';
 import { handleViewsHistory } from './routes/views-history.js';
+import { handleBackfillDailyViews } from './routes/backfill-daily-views.js';
 import { handleCaptions, handleCaptionById } from './routes/captions.js';
 import { handleHooks, handleHookById } from './routes/hooks.js';
 import { handleVideos } from './routes/videos.js';
@@ -253,6 +254,11 @@ startup().then(() => {
       // Manual views sync endpoint (requires admin authentication)
       if (url.pathname === '/api/sync-views' && request.method === 'POST') {
         return withCors(await handleSyncViews(request, viewsSyncCron), request);
+      }
+
+      // Backfill daily views (one-time admin endpoint)
+      if (url.pathname === '/api/backfill-daily-views' && request.method === 'POST') {
+        return withCors(await handleBackfillDailyViews(request), request);
       }
 
       // Agent evaluation endpoints (requires admin authentication)

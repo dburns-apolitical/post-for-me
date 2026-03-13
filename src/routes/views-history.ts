@@ -35,23 +35,24 @@ export async function handleViewsHistory(request: Request): Promise<Response> {
 
         const rows = accountId !== null
             ? await sql`
-                SELECT day::text, views
+                SELECT day::text, views, post_count
                 FROM daily_views
                 WHERE account_id = ${accountId}
                   AND day >= CURRENT_DATE - INTERVAL '56 days'
                 ORDER BY day ASC
-            ` as { day: string; views: string }[]
+            ` as { day: string; views: string; post_count: string }[]
             : await sql`
-                SELECT day::text, SUM(views)::integer as views
+                SELECT day::text, SUM(views)::integer as views, SUM(post_count)::integer as post_count
                 FROM daily_views
                 WHERE day >= CURRENT_DATE - INTERVAL '56 days'
                 GROUP BY day
                 ORDER BY day ASC
-            ` as { day: string; views: string }[];
+            ` as { day: string; views: string; post_count: string }[];
 
         const dailyViews: DailyViewsEntry[] = rows.map(row => ({
             day: row.day,
             views: parseInt(row.views, 10) || 0,
+            postCount: parseInt(row.post_count, 10) || 0,
         }));
 
         const now = new Date();
