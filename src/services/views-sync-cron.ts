@@ -76,6 +76,9 @@ export class ViewsSyncCronService {
             const accounts = await this.db.getAccounts();
             const accountMap = new Map(accounts.map(a => [a.id, a]));
 
+            // Track per-account views for daily_views table
+            const accountViewTotals = new Map<number, { views: number; postCount: number }>();
+
             for (const post of posts) {
                 try {
                     if (!post.instagram_post_id) {
@@ -95,6 +98,12 @@ export class ViewsSyncCronService {
                     const views = await instagram.getMediaInsights(post.instagram_post_id);
                     await this.db.updatePostViews(post.id, views);
 
+                    // Accumulate for daily_views
+                    const existing = accountViewTotals.get(post.account_id) || { views: 0, postCount: 0 };
+                    existing.views += views;
+                    existing.postCount += 1;
+                    accountViewTotals.set(post.account_id, existing);
+
                     logger.info('Updated views for post', {
                         postId: post.id,
                         instagramPostId: post.instagram_post_id,
@@ -108,6 +117,20 @@ export class ViewsSyncCronService {
                         error: error instanceof Error ? error.message : 'Unknown error',
                     });
                     failed++;
+                }
+            }
+
+            // Write daily views aggregates
+            const today = new Date();
+            for (const [accountId, totals] of accountViewTotals) {
+                try {
+                    await this.db.insertDailyViews(accountId, today, totals.views, totals.postCount);
+                    logger.info('Recorded daily views', { accountId, views: totals.views, postCount: totals.postCount });
+                } catch (error) {
+                    logger.error('Failed to record daily views', {
+                        accountId,
+                        error: error instanceof Error ? error.message : 'Unknown error',
+                    });
                 }
             }
 
