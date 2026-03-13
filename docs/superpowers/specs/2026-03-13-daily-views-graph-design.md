@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS daily_views (
     account_id INTEGER NOT NULL REFERENCES accounts(id),
     day DATE NOT NULL,
     views INTEGER NOT NULL,
+    post_count INTEGER NOT NULL,
     UNIQUE(account_id, day)
 );
 CREATE INDEX IF NOT EXISTS idx_daily_views_day ON daily_views(day);
@@ -28,6 +29,7 @@ CREATE INDEX IF NOT EXISTS idx_daily_views_day ON daily_views(day);
 - One row per account per sync run
 - `day` = the date the sync ran (CURRENT_DATE)
 - `views` = sum of lifetime view counts from posts synced in that run. This is intentionally a snapshot of total views at sync time, not incremental daily views. The graph compares "which day's batch of synced posts performed better."
+- `post_count` = number of posts synced in that run for this account. Useful for future analysis (e.g., average views per post per day).
 - The UNIQUE constraint prevents duplicates if the cron runs twice or is manually triggered on the same day
 - Rows are immutable once written — past data never needs updating
 - Data is naturally ~2 days behind today (posts must be 2+ days old before sync)
@@ -38,11 +40,11 @@ CREATE INDEX IF NOT EXISTS idx_daily_views_day ON daily_views(day);
 At the end of `ViewsSyncCronService.syncViews()`, after all posts have been processed:
 
 1. Track which posts were successfully synced in this run, grouped by `account_id`
-2. For each account that had posts synced, sum the views of those posts
-3. Insert into `daily_views` using `ON CONFLICT (account_id, day) DO UPDATE SET views = daily_views.views + EXCLUDED.views` to handle re-triggers gracefully (adds to existing total for that day)
+2. For each account that had posts synced, sum the views and count the posts
+3. Insert into `daily_views` using `ON CONFLICT (account_id, day) DO UPDATE SET views = daily_views.views + EXCLUDED.views, post_count = daily_views.post_count + EXCLUDED.post_count` to handle re-triggers gracefully (adds to existing totals for that day)
 
 This requires:
-- A new `insertDailyViews(accountId: number, day: Date, views: number)` method on `DatabaseService`
+- A new `insertDailyViews(accountId: number, day: Date, views: number, postCount: number)` method on `DatabaseService`
 - The table creation added to `initializeSchema()`
 - Accumulating per-account view totals in the sync loop, then writing after the loop completes
 
