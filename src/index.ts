@@ -4,6 +4,7 @@ import { handlePostReel } from './routes/post-reel.js';
 import { handlePostStatus } from './routes/post-status.js';
 import { handleTestInstagram } from './routes/test-instagram.js';
 import { handleStats } from './routes/stats.js';
+import { handleViewsHistory } from './routes/views-history.js';
 import { handleCaptions, handleCaptionById } from './routes/captions.js';
 import { handleHooks, handleHookById } from './routes/hooks.js';
 import { handleVideos } from './routes/videos.js';
@@ -215,6 +216,11 @@ startup().then(() => {
       // Dashboard stats endpoint (requires authentication)
       if (url.pathname === '/api/stats' && request.method === 'GET') {
         return withCors(await handleStats(request), request);
+      }
+
+      // Views history endpoint (requires authentication)
+      if (url.pathname === '/api/stats/views-history' && request.method === 'GET') {
+        return withCors(await handleViewsHistory(request), request);
       }
 
       // Captions endpoint (requires authentication)
