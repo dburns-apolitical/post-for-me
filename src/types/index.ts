@@ -169,6 +169,13 @@ export interface PostWithDetails {
     account_name: string;
 }
 
+export interface RecentPost {
+    account_name: string;
+    video_title: string;
+    status: PostStatus;
+    created_at: string;
+}
+
 export interface RankedItem {
     id: number;
     text: string;
@@ -192,7 +199,6 @@ export interface PostCountMetrics {
 
 export interface DashboardStats {
     topPosts: PostWithDetails[];
-    mostRecentPost: PostWithDetails | null;
     viewsMetrics: ViewsMetrics;
     postCountMetrics: PostCountMetrics;
     topCaptions: RankedItem[];
