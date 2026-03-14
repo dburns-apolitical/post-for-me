@@ -1,10 +1,11 @@
 import { logger } from '../utils/logger.js';
 import { validatePostReelRequest } from '../utils/validation.js';
 import { validateAuth, unauthorizedResponse, forbiddenResponse } from '../utils/auth.js';
-import type { PostReelResponse, DbAccount, InstagramDirectCredentials } from '../types/index.js';
+import type { PostReelResponse, DbAccount, InstagramDirectCredentials, UploadPostCredentials } from '../types/index.js';
 import { VideoSelectorService } from '../services/video-selector.js';
 import { VideoEditorService } from '../services/video-editor.js';
 import { InstagramClientService } from '../services/instagram-client.js';
+import { UploadPostClientService } from '../services/upload-post-client.js';
 import { DatabaseService } from '../services/database.js';
 
 /**
@@ -29,12 +30,6 @@ async function processPostInBackground(
     const videoEditor = new VideoEditorService();
 
     try {
-        const credential = await db.getCredentialsByPlatform(account.id, 'instagram_direct');
-        if (!credential) {
-            throw new Error(`No instagram_direct credentials found for account ${account.id}`);
-        }
-        const igCreds = credential.credentials as InstagramDirectCredentials;
-        const instagramClient = new InstagramClientService(igCreds.ig_access_token, igCreds.ig_user_id);
         // Step 3: Validate video format
         logger.info('Step 3: Validating video format', { postId });
         const validation_result = await videoEditor.validateVideoFormat(inputVideoPath);
@@ -62,24 +57,96 @@ async function processPostInBackground(
 
         logger.info('Edited video uploaded', { postId, videoUrl: editedVideoUrl });
 
-        // Step 6: Post to Instagram
-        logger.info('Step 6: Posting Reel to Instagram', { postId });
-        const instagramPost = await instagramClient.postReel(
-            editedVideoUrl,
-            caption,
-            hashtags,
-            shareToFeed
-        );
+        // Step 6: Post to platforms
+        logger.info('Step 6: Posting Reel to platforms', { postId });
 
-        logger.info('Reel posted successfully', {
-            postId,
-            instagramPostId: instagramPost.id,
-            status: instagramPost.status,
-        });
+        // Look up credentials for both platforms
+        const igCredential = await db.getCredentialsByPlatform(account.id, 'instagram_direct');
+        const upCredential = await db.getCredentialsByPlatform(account.id, 'upload_post');
 
-        // Step 7: Update post status to success with Instagram post ID
-        logger.info('Step 7: Updating post status to success', { postId });
-        await db.markPostSuccess(postId, instagramPost.id);
+        if (!igCredential && !upCredential) {
+            throw new Error(`No credentials found for account ${account.id} (need instagram_direct or upload_post)`);
+        }
+
+        // Build concurrent posting promises
+        const postingPromises: Promise<void>[] = [];
+        let instagramPostId: string | null = null;
+        let primaryError: Error | null = null;
+
+        // Instagram direct posting (if credentials exist)
+        if (igCredential) {
+            const igCreds = igCredential.credentials as InstagramDirectCredentials;
+            const igPromise = (async () => {
+                const instagramClient = new InstagramClientService(igCreds.ig_access_token, igCreds.ig_user_id);
+
+                logger.info('Posting Reel to Instagram (direct)', { postId });
+                const instagramPost = await instagramClient.postReel(
+                    editedVideoUrl!,
+                    caption,
+                    hashtags,
+                    shareToFeed
+                );
+
+                instagramPostId = instagramPost.id;
+                logger.info('Reel posted to Instagram successfully', {
+                    postId,
+                    instagramPostId: instagramPost.id,
+                    status: instagramPost.status,
+                });
+            })();
+            postingPromises.push(igPromise.catch((err) => { primaryError = err; }));
+        }
+
+        // Upload-Post posting (if credentials exist)
+        if (upCredential) {
+            const upCreds = upCredential.credentials as UploadPostCredentials;
+            const uploadPostPlatforms: string[] = ['youtube'];
+            if (!igCredential) {
+                uploadPostPlatforms.push('instagram');
+            }
+
+            const upPromise = (async () => {
+                const uploadPostClient = new UploadPostClientService(upCreds.api_key, upCreds.user);
+
+                logger.info('Posting video to Upload-Post', { postId, platforms: uploadPostPlatforms });
+                const result = await uploadPostClient.postVideo(
+                    editedVideoUrl!,
+                    caption,
+                    hashtags,
+                    uploadPostPlatforms
+                );
+
+                if (!result.success && !igCredential) {
+                    throw new Error('Upload-Post posting failed and no instagram_direct fallback');
+                }
+
+                if (!result.success) {
+                    logger.warn('Upload-Post posting failed (non-critical, instagram_direct is primary)', { postId });
+                }
+            })();
+            postingPromises.push(upPromise.catch((err) => {
+                if (!igCredential) {
+                    primaryError = err;
+                } else {
+                    logger.warn('Upload-Post error (non-critical)', {
+                        postId,
+                        error: err instanceof Error ? err.message : 'Unknown error',
+                    });
+                }
+            }));
+        }
+
+        // Wait for all posting operations to complete
+        await Promise.all(postingPromises);
+
+        // Check for errors from the primary platform
+        if (primaryError) {
+            throw primaryError;
+        }
+
+        // Update post status to success
+        logger.info('Updating post status to success', { postId });
+        await db.markPostSuccess(postId, instagramPostId);
 
         // Step 7b: Create user_posts entry if user info available
         if (userId && userName) {
