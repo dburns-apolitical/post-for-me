@@ -3,13 +3,18 @@ import { validateAuth, unauthorizedResponse, forbiddenResponse } from '../utils/
 import { DatabaseService } from '../services/database.js';
 import { maskCredentials } from '../utils/mask.js';
 import { z } from 'zod';
-import type { Platform, InstagramDirectCredentials } from '../types/index.js';
+import type { Platform, InstagramDirectCredentials, UploadPostCredentials } from '../types/index.js';
 
 const platformValues: [Platform, ...Platform[]] = ['instagram_direct', 'upload_post'];
 
 const instagramDirectCredentialsSchema = z.object({
     ig_access_token: z.string().min(1, 'Instagram access token is required'),
     ig_user_id: z.string().min(1, 'Instagram user ID is required'),
+});
+
+const uploadPostCredentialsSchema = z.object({
+    api_key: z.string().min(1, 'Upload-Post API key is required'),
+    user: z.string().min(1, 'Upload-Post user is required'),
 });
 
 const createCredentialSchema = z.object({
@@ -20,7 +25,10 @@ const createCredentialSchema = z.object({
         if (data.platform === 'instagram_direct') {
             return instagramDirectCredentialsSchema.safeParse(data.credentials).success;
         }
-        return true;
+        if (data.platform === 'upload_post') {
+            return uploadPostCredentialsSchema.safeParse(data.credentials).success;
+        }
+        return false;
     },
     { message: 'Invalid credentials for the specified platform' }
 );
@@ -73,7 +81,7 @@ export async function handleAccountCredentials(request: Request, accountId: numb
             const credential = await db.createCredential(
                 accountId,
                 parsed.data.platform,
-                parsed.data.credentials as unknown as InstagramDirectCredentials
+                parsed.data.credentials as unknown as (InstagramDirectCredentials | UploadPostCredentials)
             );
             return Response.json({
                 success: true,
@@ -135,9 +143,17 @@ export async function handleCredentialById(request: Request, credentialId: numbe
                         { status: 400 }
                     );
                 }
+            } else if (existing.platform === 'upload_post') {
+                const platformValidation = uploadPostCredentialsSchema.safeParse(parsed.data.credentials);
+                if (!platformValidation.success) {
+                    return Response.json(
+                        { success: false, error: platformValidation.error.errors[0].message },
+                        { status: 400 }
+                    );
+                }
             }
 
-            const credential = await db.updateCredential(credentialId, parsed.data.credentials as unknown as InstagramDirectCredentials);
+            const credential = await db.updateCredential(credentialId, parsed.data.credentials as unknown as (InstagramDirectCredentials | UploadPostCredentials));
             if (!credential) {
                 return Response.json(
                     { success: false, error: 'Credential not found' },
