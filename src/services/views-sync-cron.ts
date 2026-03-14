@@ -1,6 +1,7 @@
 import { DatabaseService } from './database.js';
 import { InstagramClientService } from './instagram-client.js';
 import { logger } from '../utils/logger.js';
+import type { InstagramDirectCredentials } from '../types/index.js';
 
 export class ViewsSyncCronService {
     private timer: Timer | null = null;
@@ -81,7 +82,7 @@ export class ViewsSyncCronService {
             for (const account of accounts) {
                 const credential = await this.db.getCredentialsByPlatform(account.id, 'instagram_direct');
                 if (credential) {
-                    credentialMap.set(account.id, credential.credentials);
+                    credentialMap.set(account.id, credential.credentials as InstagramDirectCredentials);
                 }
             }
 

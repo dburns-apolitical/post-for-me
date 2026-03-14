@@ -2,6 +2,7 @@ import { logger } from '../utils/logger.js';
 import { validateAuth, unauthorizedResponse, forbiddenResponse } from '../utils/auth.js';
 import { InstagramClientService } from '../services/instagram-client.js';
 import { DatabaseService } from '../services/database.js';
+import type { InstagramDirectCredentials } from '../types/index.js';
 
 export async function handleTestInstagram(request: Request): Promise<Response> {
     const authResult = await validateAuth(request);
@@ -34,7 +35,8 @@ export async function handleTestInstagram(request: Request): Promise<Response> {
                 if (!credential) {
                     throw new Error(`No instagram_direct credentials found for account ${account.id}`);
                 }
-                const instagramClient = new InstagramClientService(credential.credentials.ig_access_token, credential.credentials.ig_user_id);
+                const igCreds = credential.credentials as InstagramDirectCredentials;
+                const instagramClient = new InstagramClientService(igCreds.ig_access_token, igCreds.ig_user_id);
                 const accountInfo = await instagramClient.getAccountInfo();
                 results.push({
                     id: account.id,

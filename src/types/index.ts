@@ -137,11 +137,16 @@ export interface InstagramDirectCredentials {
     ig_user_id: string;
 }
 
+export interface UploadPostCredentials {
+    api_key: string;
+    user: string;
+}
+
 export interface DbCredential {
     id: number;
     account_id: number;
     platform: Platform;
-    credentials: InstagramDirectCredentials;
+    credentials: InstagramDirectCredentials | UploadPostCredentials;
     created_at: Date;
 }
 

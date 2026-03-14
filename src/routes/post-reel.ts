@@ -1,7 +1,7 @@
 import { logger } from '../utils/logger.js';
 import { validatePostReelRequest } from '../utils/validation.js';
 import { validateAuth, unauthorizedResponse, forbiddenResponse } from '../utils/auth.js';
-import type { PostReelResponse, DbAccount } from '../types/index.js';
+import type { PostReelResponse, DbAccount, InstagramDirectCredentials } from '../types/index.js';
 import { VideoSelectorService } from '../services/video-selector.js';
 import { VideoEditorService } from '../services/video-editor.js';
 import { InstagramClientService } from '../services/instagram-client.js';
@@ -33,7 +33,8 @@ async function processPostInBackground(
         if (!credential) {
             throw new Error(`No instagram_direct credentials found for account ${account.id}`);
         }
-        const instagramClient = new InstagramClientService(credential.credentials.ig_access_token, credential.credentials.ig_user_id);
+        const igCreds = credential.credentials as InstagramDirectCredentials;
+        const instagramClient = new InstagramClientService(igCreds.ig_access_token, igCreds.ig_user_id);
         // Step 3: Validate video format
         logger.info('Step 3: Validating video format', { postId });
         const validation_result = await videoEditor.validateVideoFormat(inputVideoPath);
