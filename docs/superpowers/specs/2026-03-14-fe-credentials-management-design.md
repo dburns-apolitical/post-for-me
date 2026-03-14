@@ -44,9 +44,13 @@ The account add/edit form is simplified from 4 fields to 2:
 
 Remove `ig_access_token` and `ig_user_id` from the form entirely. Credentials are managed separately via the expandable credential rows.
 
+The `AccountFormData` type simplifies to `{ name: string; gcs_bucket_name: string }`. The `handleSubmit` body for both create and edit must only send `{ name, gcs_bucket_name }`.
+
+The table columns become: (chevron toggle), Name, GCS Bucket, Actions. Remove the IG User ID column.
+
 ## Expandable Credential Rows
 
-Each account row in the table gets a chevron toggle button. When clicked, an expandable section appears below the account row showing:
+Each account row in the table gets a chevron toggle button (`ChevronRight` when collapsed, `ChevronDown` when expanded, from `lucide-react`). When clicked, a second `<TableRow>` with a single `<TableCell colSpan={N}>` is conditionally rendered below the account row, containing the credential content. Only one account can be expanded at a time. The expanded section shows:
 
 - **List of existing credentials** — each displayed as a row with:
   - Platform badge (`Instagram Direct` / `Upload Post`) using the existing `Badge` component
@@ -103,7 +107,19 @@ New component-level state in `accounts.tsx`:
 - `addingCredentialForAccountId: number | null` — which account has the add form open
 - `editingCredentialId: number | null` — which credential is being edited
 - `deletingCredential: Credential | null` — which credential is pending delete confirmation
-- `credentialFormData` — platform and credential field values for the add/edit form
+- `credentialFormData` — form state for the add/edit credential form:
+  ```typescript
+  interface CredentialFormData {
+      platform: Platform | '';
+      ig_access_token: string;
+      ig_user_id: string;
+      api_key: string;
+      user: string;
+  }
+  ```
+  All fields present in state; only the relevant ones for the selected platform are shown and sent to the API.
+- `isSavingCredential: boolean` — loading state for credential save operations
+- `credentialError: string | null` — error message for credential mutations
 
 ## Files Changed
 
