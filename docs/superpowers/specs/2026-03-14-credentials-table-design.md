@@ -9,7 +9,12 @@ Decouple platform credentials from the `accounts` table into a dedicated `creden
 ### New PostgreSQL ENUM
 
 ```sql
-CREATE TYPE platform AS ENUM ('instagram_direct', 'upload_post');
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'platform') THEN
+        CREATE TYPE platform AS ENUM ('instagram_direct', 'upload_post');
+    END IF;
+END $$;
 ```
 
 - `instagram_direct`: Current Instagram Graph API posting flow
@@ -30,7 +35,7 @@ CREATE TABLE credentials (
 - `JSONB` for efficient querying and indexing
 - `ON DELETE CASCADE` — credentials are removed when their account is deleted
 - No unique constraint on `(account_id, platform)` — an account may have multiple credentials of the same platform type
-- No `updated_at` — credentials are replaced wholesale, not partially updated
+- Index on `account_id` for query performance, consistent with other FK indexes in the project
 
 ### Accounts Table
 
@@ -90,9 +95,9 @@ credentials: InstagramDirectCredentials | NewPlatformCredentials;
 New methods on `DatabaseService`:
 
 - **`getCredentialsByAccountId(accountId: number): Promise<DbCredential[]>`** — all credentials for an account
-- **`getCredentialsByPlatform(accountId: number, platform: Platform): Promise<DbCredential | null>`** — specific platform credentials for an account
-- **`createCredential(accountId: number, platform: Platform, credentials: InstagramDirectCredentials): Promise<DbCredential>`** — insert new credentials
-- **`updateCredential(id: number, credentials: InstagramDirectCredentials): Promise<DbCredential>`** — replace the JSON blob
+- **`getCredentialsByPlatform(accountId: number, platform: Platform): Promise<DbCredential | null>`** — most recent credentials for an account+platform pair (`ORDER BY created_at DESC LIMIT 1`)
+- **`createCredential(accountId: number, platform: Platform, credentials: DbCredential['credentials']): Promise<DbCredential>`** — insert new credentials
+- **`updateCredential(id: number, credentials: DbCredential['credentials']): Promise<DbCredential>`** — replace the JSON blob
 - **`deleteCredential(id: number): Promise<void>`** — remove a credentials row
 
 ## Posting Flow Changes
@@ -101,7 +106,7 @@ Update all places that read Instagram credentials to use the credentials table i
 
 1. **`src/routes/post-reel.ts`** — fetch credentials via `getCredentialsByPlatform(accountId, 'instagram_direct')`, pass to `InstagramClientService`
 2. **`src/routes/test-instagram.ts`** — same pattern for credential verification
-3. **`src/services/views-sync-cron.ts`** — same pattern for views syncing
+3. **`src/services/views-sync-cron.ts`** — same pattern for views syncing (also covers `src/routes/sync-views.ts` manual trigger which delegates to this service)
 
 If no `instagram_direct` credentials row exists for the account, fail with a clear error.
 
@@ -116,10 +121,14 @@ If no `instagram_direct` credentials row exists for the account, fail with a cle
 
 ### Changes to Existing Account Endpoints
 
-- **`POST /api/accounts`** — stop accepting `ig_access_token` / `ig_user_id` in the request body
+- **`POST /api/accounts`** — stop accepting `ig_access_token` / `ig_user_id` in the request body. New accounts are created first, then credentials are added via `POST /api/accounts/:id/credentials`.
 - **`PATCH /api/accounts/:id`** — stop accepting credential fields
-- **`GET /api/accounts`** — include each account's credentials in the response (joined), with all credential values masked
+- **`GET /api/accounts`** — include each account's credentials in the response (joined), with all credential values masked. Each account includes a `credentials` array of `{ id, platform, credentials (masked), created_at }`.
 
 ### Masking
 
-All credential values are masked in GET responses (e.g., `"igxx...xxAb"`), consistent with current `ig_access_token` masking behavior.
+All credential values are masked in GET responses. Apply the existing `maskToken()` utility to each string value in the credentials JSON object individually (e.g., `{ ig_access_token: "igxx...xxAb", ig_user_id: "12...89" }`).
+
+### Validation
+
+New credential endpoints use Zod schemas for request validation, consistent with existing endpoints. Validate `platform` against the Platform type values and `credentials` shape based on platform type.
