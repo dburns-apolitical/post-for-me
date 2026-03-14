@@ -15,6 +15,8 @@ import type {
     PostWithDetails,
     AgentEvaluation,
     ContentAccount,
+    DbCredential,
+    Platform,
 } from '../types/index.js';
 
 export class DatabaseService {
@@ -823,6 +825,63 @@ export class DatabaseService {
         ` as { id: number }[];
 
         return { deleted: result.length > 0 };
+    }
+
+    // Credential methods
+
+    async getCredentialsByAccountId(accountId: number): Promise<DbCredential[]> {
+        return await this.sql`
+            SELECT id, account_id, platform, credentials, created_at
+            FROM credentials
+            WHERE account_id = ${accountId}
+            ORDER BY created_at DESC
+        ` as DbCredential[];
+    }
+
+    async getCredentialsByPlatform(accountId: number, platform: Platform): Promise<DbCredential | null> {
+        const result = await this.sql`
+            SELECT id, account_id, platform, credentials, created_at
+            FROM credentials
+            WHERE account_id = ${accountId} AND platform = ${platform}
+            ORDER BY created_at DESC
+            LIMIT 1
+        ` as DbCredential[];
+        return result.length > 0 ? result[0] : null;
+    }
+
+    async createCredential(accountId: number, platform: Platform, credentials: DbCredential['credentials']): Promise<DbCredential> {
+        const result = await this.sql`
+            INSERT INTO credentials (account_id, platform, credentials)
+            VALUES (${accountId}, ${platform}, ${JSON.stringify(credentials)})
+            RETURNING id, account_id, platform, credentials, created_at
+        ` as DbCredential[];
+        return result[0];
+    }
+
+    async updateCredential(id: number, credentials: DbCredential['credentials']): Promise<DbCredential | null> {
+        const result = await this.sql`
+            UPDATE credentials
+            SET credentials = ${JSON.stringify(credentials)}
+            WHERE id = ${id}
+            RETURNING id, account_id, platform, credentials, created_at
+        ` as DbCredential[];
+        return result.length > 0 ? result[0] : null;
+    }
+
+    async deleteCredential(id: number): Promise<boolean> {
+        const result = await this.sql`
+            DELETE FROM credentials WHERE id = ${id} RETURNING id
+        ` as { id: number }[];
+        return result.length > 0;
+    }
+
+    async getCredential(id: number): Promise<DbCredential | null> {
+        const result = await this.sql`
+            SELECT id, account_id, platform, credentials, created_at
+            FROM credentials
+            WHERE id = ${id}
+        ` as DbCredential[];
+        return result.length > 0 ? result[0] : null;
     }
 
     /**
