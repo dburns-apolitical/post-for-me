@@ -549,7 +549,7 @@ export class DatabaseService {
     /**
      * Update post with success status and Instagram post ID
      */
-    async markPostSuccess(postId: number, instagramPostId: string): Promise<void> {
+    async markPostSuccess(postId: number, instagramPostId: string | null): Promise<void> {
         await this.sql`
             UPDATE posts
             SET status = 'success', instagram_post_id = ${instagramPostId}, updated_at = NOW()
