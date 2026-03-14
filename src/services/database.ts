@@ -15,6 +15,8 @@ import type {
     PostWithDetails,
     AgentEvaluation,
     ContentAccount,
+    DbCredential,
+    Platform,
 } from '../types/index.js';
 
 export class DatabaseService {
@@ -316,6 +318,46 @@ export class DatabaseService {
             CREATE INDEX IF NOT EXISTS idx_daily_views_day ON daily_views(day)
         `;
 
+        // Create platform enum type
+        await this.sql`
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'platform') THEN
+                    CREATE TYPE platform AS ENUM ('instagram_direct', 'upload_post');
+                END IF;
+            END $$
+        `;
+
+        // Create credentials table
+        await this.sql`
+            CREATE TABLE IF NOT EXISTS credentials (
+                id SERIAL PRIMARY KEY,
+                account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+                platform platform NOT NULL,
+                credentials JSONB NOT NULL,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        `;
+
+        await this.sql`
+            CREATE INDEX IF NOT EXISTS idx_credentials_account_id ON credentials(account_id)
+        `;
+
+        // Migrate existing Instagram credentials from accounts table
+        await this.sql`
+            INSERT INTO credentials (account_id, platform, credentials)
+            SELECT id, 'instagram_direct', jsonb_build_object(
+                'ig_access_token', ig_access_token,
+                'ig_user_id', ig_user_id
+            )
+            FROM accounts
+            WHERE ig_access_token IS NOT NULL AND ig_access_token != ''
+              AND ig_user_id IS NOT NULL AND ig_user_id != ''
+              AND id NOT IN (
+                  SELECT account_id FROM credentials WHERE platform = 'instagram_direct'
+              )
+        `;
+
         logger.info('Database schema initialized');
     }
 
@@ -507,7 +549,7 @@ export class DatabaseService {
     /**
      * Update post with success status and Instagram post ID
      */
-    async markPostSuccess(postId: number, instagramPostId: string): Promise<void> {
+    async markPostSuccess(postId: number, instagramPostId: string | null): Promise<void> {
         await this.sql`
             UPDATE posts
             SET status = 'success', instagram_post_id = ${instagramPostId}, updated_at = NOW()
@@ -783,6 +825,63 @@ export class DatabaseService {
         ` as { id: number }[];
 
         return { deleted: result.length > 0 };
+    }
+
+    // Credential methods
+
+    async getCredentialsByAccountId(accountId: number): Promise<DbCredential[]> {
+        return await this.sql`
+            SELECT id, account_id, platform, credentials, created_at
+            FROM credentials
+            WHERE account_id = ${accountId}
+            ORDER BY created_at DESC
+        ` as DbCredential[];
+    }
+
+    async getCredentialsByPlatform(accountId: number, platform: Platform): Promise<DbCredential | null> {
+        const result = await this.sql`
+            SELECT id, account_id, platform, credentials, created_at
+            FROM credentials
+            WHERE account_id = ${accountId} AND platform = ${platform}
+            ORDER BY created_at DESC
+            LIMIT 1
+        ` as DbCredential[];
+        return result.length > 0 ? result[0] : null;
+    }
+
+    async createCredential(accountId: number, platform: Platform, credentials: DbCredential['credentials']): Promise<DbCredential> {
+        const result = await this.sql`
+            INSERT INTO credentials (account_id, platform, credentials)
+            VALUES (${accountId}, ${platform}, ${JSON.stringify(credentials)})
+            RETURNING id, account_id, platform, credentials, created_at
+        ` as DbCredential[];
+        return result[0];
+    }
+
+    async updateCredential(id: number, credentials: DbCredential['credentials']): Promise<DbCredential | null> {
+        const result = await this.sql`
+            UPDATE credentials
+            SET credentials = ${JSON.stringify(credentials)}
+            WHERE id = ${id}
+            RETURNING id, account_id, platform, credentials, created_at
+        ` as DbCredential[];
+        return result.length > 0 ? result[0] : null;
+    }
+
+    async deleteCredential(id: number): Promise<boolean> {
+        const result = await this.sql`
+            DELETE FROM credentials WHERE id = ${id} RETURNING id
+        ` as { id: number }[];
+        return result.length > 0;
+    }
+
+    async getCredential(id: number): Promise<DbCredential | null> {
+        const result = await this.sql`
+            SELECT id, account_id, platform, credentials, created_at
+            FROM credentials
+            WHERE id = ${id}
+        ` as DbCredential[];
+        return result.length > 0 ? result[0] : null;
     }
 
     /**

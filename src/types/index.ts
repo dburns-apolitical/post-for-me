@@ -130,6 +130,26 @@ export interface DbAccount {
     created_at: Date;
 }
 
+export type Platform = 'instagram_direct' | 'upload_post';
+
+export interface InstagramDirectCredentials {
+    ig_access_token: string;
+    ig_user_id: string;
+}
+
+export interface UploadPostCredentials {
+    api_key: string;
+    user: string;
+}
+
+export interface DbCredential {
+    id: number;
+    account_id: number;
+    platform: Platform;
+    credentials: InstagramDirectCredentials | UploadPostCredentials;
+    created_at: Date;
+}
+
 export interface DbPost {
     id: number;
     video_id: number;
