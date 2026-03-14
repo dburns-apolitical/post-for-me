@@ -76,6 +76,15 @@ export class ViewsSyncCronService {
             const accounts = await this.db.getAccounts();
             const accountMap = new Map(accounts.map(a => [a.id, a]));
 
+            // Pre-load credentials for all accounts
+            const credentialMap = new Map<number, { ig_access_token: string; ig_user_id: string }>();
+            for (const account of accounts) {
+                const credential = await this.db.getCredentialsByPlatform(account.id, 'instagram_direct');
+                if (credential) {
+                    credentialMap.set(account.id, credential.credentials);
+                }
+            }
+
             // Track per-account views for daily_views table
             const accountViewTotals = new Map<number, { views: number; postCount: number }>();
 
@@ -94,7 +103,13 @@ export class ViewsSyncCronService {
                         continue;
                     }
 
-                    const instagram = new InstagramClientService(account.ig_access_token, account.ig_user_id);
+                    const creds = credentialMap.get(post.account_id);
+                    if (!creds) {
+                        logger.warn('No instagram_direct credentials found for account, skipping', { accountId: post.account_id });
+                        failed++;
+                        continue;
+                    }
+                    const instagram = new InstagramClientService(creds.ig_access_token, creds.ig_user_id);
                     const views = await instagram.getMediaInsights(post.instagram_post_id);
                     await this.db.updatePostViews(post.id, views);
 
