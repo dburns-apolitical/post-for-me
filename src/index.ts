@@ -14,6 +14,7 @@ import { handleSyncViews } from './routes/sync-views.js';
 import { handleRunEvaluation } from './routes/run-evaluation.js';
 import { handleEvaluations } from './routes/evaluations.js';
 import { handleAccounts, handleAccountById, handleAccountContent } from './routes/accounts.js';
+import { handleAccountCredentials, handleCredentialById } from './routes/credentials.js';
 import { DatabaseService } from './services/database.js';
 import { ViewsSyncCronService } from './services/views-sync-cron.js';
 import { AgentEvalCronService } from './services/agent-eval-cron.js';
@@ -300,6 +301,18 @@ startup().then(() => {
           accountContentItemMatch[2],
           parseInt(accountContentItemMatch[3], 10)
         ), request);
+      }
+
+      // Account credentials
+      const accountCredentialsMatch = url.pathname.match(/^\/api\/accounts\/(\d+)\/credentials$/);
+      if (accountCredentialsMatch && (request.method === 'GET' || request.method === 'POST')) {
+        return withCors(await handleAccountCredentials(request, parseInt(accountCredentialsMatch[1], 10)), request);
+      }
+
+      // Credential by ID
+      const credentialByIdMatch = url.pathname.match(/^\/api\/credentials\/(\d+)$/);
+      if (credentialByIdMatch && (request.method === 'PATCH' || request.method === 'DELETE')) {
+        return withCors(await handleCredentialById(request, parseInt(credentialByIdMatch[1], 10)), request);
       }
 
       // 404 for unknown routes
