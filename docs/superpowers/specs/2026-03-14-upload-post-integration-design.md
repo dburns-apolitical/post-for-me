@@ -11,7 +11,7 @@ Add Upload-Post as a second posting platform alongside the existing Instagram di
 Add to `src/types/index.ts`:
 
 ```typescript
-interface UploadPostCredentials {
+export interface UploadPostCredentials {
     api_key: string;
     user: string;
 }
@@ -54,7 +54,8 @@ class UploadPostClientService {
   - `video`: GCS URL of the edited video (Upload-Post accepts video URLs)
   - `title`: Full caption text (caption + "\n\n" + hashtags, same format as Instagram flow)
   - `async_upload`: `true` (fire-and-forget, no polling)
-- **Response handling**: Log the response (success or error). Return `{ success: true, requestId }` on 200/202, `{ success: false }` on error. Do not throw — callers treat this as fire-and-forget.
+- **Multipart array convention**: Each platform is sent as a separate `platform[]` field (standard HTML form convention), e.g., two fields both named `platform[]` with values `youtube` and `instagram`.
+- **Response handling**: Log the response (success or error). Return `{ success: true, requestId }` on 200/202, `{ success: false }` on error. The method itself never throws. The caller is responsible for checking the return value and acting on failures when Upload-Post is the primary platform (no `instagram_direct` credentials).
 
 ## Updated Posting Flow
 
@@ -63,6 +64,10 @@ In `processPostInBackground` (`src/routes/post-reel.ts`), after video editing an
 1. Look up `instagram_direct` credentials via `db.getCredentialsByPlatform(accountId, 'instagram_direct')`
 2. Look up `upload_post` credentials via `db.getCredentialsByPlatform(accountId, 'upload_post')`
 3. If neither exists, throw an error (post marked as failed)
+
+### Concurrent Execution
+
+Both posting operations run concurrently via `Promise.allSettled` (or equivalent). Instagram direct and Upload-Post are kicked off at the same time. This avoids unnecessary latency since Instagram direct involves polling (container ready check with exponential backoff).
 
 ### Instagram Direct (if credentials exist)
 
@@ -74,13 +79,17 @@ Determine target platforms:
 - Always include `'youtube'`
 - Add `'instagram'` only if no `instagram_direct` credentials were found in step 1
 
-Call `UploadPostClientService.postVideo()` with the GCS video URL, caption, hashtags, and platforms.
+Call `UploadPostClientService.postVideo()` with the GCS video URL, caption, hashtags, and platforms. Check the return value — if Upload-Post is the primary platform (no `instagram_direct` creds) and `{ success: false }` is returned, mark the post as failed.
 
 ### Success/Failure Rules
 
 - **Has `instagram_direct` credentials**: Instagram direct result determines post status. Upload-Post is fire-and-forget (errors logged, don't affect status).
-- **No `instagram_direct` credentials**: Upload-Post result determines post status.
+- **No `instagram_direct` credentials**: Upload-Post result determines post status. Check `postVideo()` return value and mark as failed if `success: false`.
 - **Timing**: All posting operations must complete before marking the post and before GCS cleanup (the video URL must remain accessible for Upload-Post).
+
+### markPostSuccess Compatibility
+
+The existing `markPostSuccess(postId, instagramPostId)` requires an Instagram post ID. For the Upload-Post-only flow, call `markPostSuccess` with `null` for the `instagramPostId` parameter — update the method signature to accept `string | null`.
 
 ### Error Handling
 
@@ -102,12 +111,14 @@ const uploadPostCredentialsSchema = z.object({
 Extend the `createCredentialSchema.refine()` to validate:
 - `instagram_direct` → `instagramDirectCredentialsSchema`
 - `upload_post` → `uploadPostCredentialsSchema`
+- Any other platform → reject (return `false` instead of the current `return true` fallback)
 
-Same validation in `handleCredentialById` PATCH handler.
+Same validation in `handleCredentialById` PATCH handler — add an `else if (existing.platform === 'upload_post')` branch with the `uploadPostCredentialsSchema`.
 
 ## Files Changed
 
 - **Modify**: `src/types/index.ts` — add `UploadPostCredentials`, update `DbCredential` union
 - **Create**: `src/services/upload-post-client.ts` — new Upload-Post API client
 - **Modify**: `src/routes/post-reel.ts` — update `processPostInBackground` to support both platforms
-- **Modify**: `src/routes/credentials.ts` — add `upload_post` credential validation
+- **Modify**: `src/routes/credentials.ts` — add `upload_post` credential validation, tighten refine fallback
+- **Modify**: `src/services/database.ts` — update `markPostSuccess` to accept `string | null` for `instagramPostId`
