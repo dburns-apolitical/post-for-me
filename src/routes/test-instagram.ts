@@ -30,7 +30,11 @@ export async function handleTestInstagram(request: Request): Promise<Response> {
 
         for (const account of accounts) {
             try {
-                const instagramClient = new InstagramClientService(account.ig_access_token, account.ig_user_id);
+                const credential = await db.getCredentialsByPlatform(account.id, 'instagram_direct');
+                if (!credential) {
+                    throw new Error(`No instagram_direct credentials found for account ${account.id}`);
+                }
+                const instagramClient = new InstagramClientService(credential.credentials.ig_access_token, credential.credentials.ig_user_id);
                 const accountInfo = await instagramClient.getAccountInfo();
                 results.push({
                     id: account.id,
