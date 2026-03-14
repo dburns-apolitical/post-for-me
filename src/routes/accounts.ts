@@ -1,20 +1,16 @@
 import { logger } from '../utils/logger.js';
 import { validateAuth, unauthorizedResponse, forbiddenResponse } from '../utils/auth.js';
 import { DatabaseService } from '../services/database.js';
-import { maskToken } from '../utils/mask.js';
+import { maskToken, maskCredentials } from '../utils/mask.js';
 import { z } from 'zod';
 
 const createAccountSchema = z.object({
     name: z.string().min(1, 'Name cannot be empty').max(200, 'Name too long'),
-    ig_access_token: z.string().min(1, 'Instagram access token is required'),
-    ig_user_id: z.string().min(1, 'Instagram user ID is required'),
     gcs_bucket_name: z.string().min(1, 'GCS bucket name is required'),
 });
 
 const updateAccountSchema = z.object({
     name: z.string().min(1).max(200).optional(),
-    ig_access_token: z.string().min(1).optional(),
-    ig_user_id: z.string().min(1).optional(),
     gcs_bucket_name: z.string().min(1).optional(),
 }).refine(data => Object.keys(data).length > 0, { message: 'At least one field must be provided' });
 
@@ -38,12 +34,22 @@ export async function handleAccounts(request: Request): Promise<Response> {
     try {
         if (request.method === 'GET') {
             const accounts = await db.getAccounts();
+            const accountsWithCreds = await Promise.all(
+                accounts.map(async (a) => {
+                    const credentials = await db.getCredentialsByAccountId(a.id);
+                    return {
+                        ...a,
+                        ig_access_token: maskToken(a.ig_access_token),
+                        credentials: credentials.map(c => ({
+                            ...c,
+                            credentials: maskCredentials(c.credentials as unknown as Record<string, unknown>),
+                        })),
+                    };
+                })
+            );
             return Response.json({
                 success: true,
-                accounts: accounts.map(a => ({
-                    ...a,
-                    ig_access_token: maskToken(a.ig_access_token),
-                })),
+                accounts: accountsWithCreds,
             });
         }
 
@@ -59,13 +65,13 @@ export async function handleAccounts(request: Request): Promise<Response> {
             try {
                 const account = await db.createAccount(
                     parsed.data.name,
-                    parsed.data.ig_access_token,
-                    parsed.data.ig_user_id,
+                    '',
+                    '',
                     parsed.data.gcs_bucket_name
                 );
                 return Response.json({
                     success: true,
-                    account: { ...account, ig_access_token: maskToken(account.ig_access_token) },
+                    account: { ...account, ig_access_token: maskToken(account.ig_access_token), credentials: [] },
                 }, { status: 201 });
             } catch (error: any) {
                 if (error?.code === '23505' || error?.message?.includes('unique')) {
@@ -118,9 +124,17 @@ export async function handleAccountById(request: Request, id: number): Promise<R
                     { status: 404 }
                 );
             }
+            const credentials = await db.getCredentialsByAccountId(id);
             return Response.json({
                 success: true,
-                account: { ...account, ig_access_token: maskToken(account.ig_access_token) },
+                account: {
+                    ...account,
+                    ig_access_token: maskToken(account.ig_access_token),
+                    credentials: credentials.map(c => ({
+                        ...c,
+                        credentials: maskCredentials(c.credentials as unknown as Record<string, unknown>),
+                    })),
+                },
             });
         }
 
