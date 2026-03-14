@@ -1,6 +1,7 @@
 import { logger } from '../utils/logger.js';
 import { validateAuth, unauthorizedResponse, forbiddenResponse } from '../utils/auth.js';
 import { DatabaseService } from '../services/database.js';
+import { maskToken } from '../utils/mask.js';
 import { z } from 'zod';
 
 const createAccountSchema = z.object({
@@ -22,11 +23,6 @@ const assignContentSchema = z.object({
     hookIds: z.array(z.number().int().min(1)).optional(),
     hashtagCombinationIds: z.array(z.number().int().min(1)).optional(),
 });
-
-function maskToken(token: string): string {
-    if (token.length <= 8) return '****';
-    return token.slice(0, 4) + '...' + token.slice(-4);
-}
 
 export async function handleAccounts(request: Request): Promise<Response> {
     const authResult = await validateAuth(request);
