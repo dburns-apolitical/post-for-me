@@ -27,7 +27,11 @@ async function processPostInBackground(
     let editedVideoUrl: string | null = null;
     const videoSelector = new VideoSelectorService(account.gcs_bucket_name);
     const videoEditor = new VideoEditorService();
-    const instagramClient = new InstagramClientService(account.ig_access_token, account.ig_user_id);
+    const credential = await db.getCredentialsByPlatform(account.id, 'instagram_direct');
+    if (!credential) {
+        throw new Error(`No instagram_direct credentials found for account ${account.id}`);
+    }
+    const instagramClient = new InstagramClientService(credential.credentials.ig_access_token, credential.credentials.ig_user_id);
 
     try {
         // Step 3: Validate video format

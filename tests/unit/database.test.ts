@@ -1,5 +1,5 @@
 import { describe, test, expect, mock, beforeEach } from 'bun:test';
-import type { PostStatus } from '../../src/types/index';
+import type { PostStatus, Platform } from '../../src/types/index';
 
 // Mock the neon module before importing DatabaseService
 const mockSql = mock(() => Promise.resolve([] as Record<string, unknown>[]));
@@ -500,7 +500,7 @@ describe('DatabaseService', () => {
     describe('getCredentialsByAccountId', () => {
         test('should return credentials for account', async () => {
             const mockCreds = [
-                { id: 1, account_id: 1, platform: 'instagram_direct', credentials: { ig_access_token: 'token', ig_user_id: 'user1' }, created_at: new Date() },
+                { id: 1, account_id: 1, platform: 'instagram_direct' as Platform, credentials: { ig_access_token: 'token', ig_user_id: 'user1' }, created_at: new Date() },
             ];
             mockSql.mockResolvedValueOnce(mockCreds);
 
@@ -520,7 +520,7 @@ describe('DatabaseService', () => {
 
     describe('getCredentialsByPlatform', () => {
         test('should return credential for account and platform', async () => {
-            const mockCred = { id: 1, account_id: 1, platform: 'instagram_direct', credentials: { ig_access_token: 'token', ig_user_id: 'user1' }, created_at: new Date() };
+            const mockCred = { id: 1, account_id: 1, platform: 'instagram_direct' as Platform, credentials: { ig_access_token: 'token', ig_user_id: 'user1' }, created_at: new Date() };
             mockSql.mockResolvedValueOnce([mockCred]);
 
             const result = await db.getCredentialsByPlatform(1, 'instagram_direct');
@@ -539,7 +539,7 @@ describe('DatabaseService', () => {
 
     describe('createCredential', () => {
         test('should create and return credential', async () => {
-            const mockCred = { id: 1, account_id: 1, platform: 'instagram_direct', credentials: { ig_access_token: 'token', ig_user_id: 'user1' }, created_at: new Date() };
+            const mockCred = { id: 1, account_id: 1, platform: 'instagram_direct' as Platform, credentials: { ig_access_token: 'token', ig_user_id: 'user1' }, created_at: new Date() };
             mockSql.mockResolvedValueOnce([mockCred]);
 
             const result = await db.createCredential(1, 'instagram_direct', { ig_access_token: 'token', ig_user_id: 'user1' });
@@ -550,7 +550,7 @@ describe('DatabaseService', () => {
 
     describe('updateCredential', () => {
         test('should update and return credential', async () => {
-            const mockCred = { id: 1, account_id: 1, platform: 'instagram_direct', credentials: { ig_access_token: 'new_token', ig_user_id: 'user1' }, created_at: new Date() };
+            const mockCred = { id: 1, account_id: 1, platform: 'instagram_direct' as Platform, credentials: { ig_access_token: 'new_token', ig_user_id: 'user1' }, created_at: new Date() };
             mockSql.mockResolvedValueOnce([mockCred]);
 
             const result = await db.updateCredential(1, { ig_access_token: 'new_token', ig_user_id: 'user1' });
@@ -587,7 +587,7 @@ describe('DatabaseService', () => {
 
     describe('getCredential', () => {
         test('should return credential by id', async () => {
-            const mockCred = { id: 1, account_id: 1, platform: 'instagram_direct', credentials: { ig_access_token: 'token', ig_user_id: 'user1' }, created_at: new Date() };
+            const mockCred = { id: 1, account_id: 1, platform: 'instagram_direct' as Platform, credentials: { ig_access_token: 'token', ig_user_id: 'user1' }, created_at: new Date() };
             mockSql.mockResolvedValueOnce([mockCred]);
 
             const result = await db.getCredential(1);
