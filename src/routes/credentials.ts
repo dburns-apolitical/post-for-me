@@ -151,6 +151,11 @@ export async function handleCredentialById(request: Request, credentialId: numbe
                         { status: 400 }
                     );
                 }
+            } else {
+                return Response.json(
+                    { success: false, error: `Unknown platform: ${existing.platform}` },
+                    { status: 400 }
+                );
             }
 
             const credential = await db.updateCredential(credentialId, parsed.data.credentials as unknown as (InstagramDirectCredentials | UploadPostCredentials));
