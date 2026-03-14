@@ -35,7 +35,10 @@ CREATE TABLE credentials (
 - `JSONB` for efficient querying and indexing
 - `ON DELETE CASCADE` — credentials are removed when their account is deleted
 - No unique constraint on `(account_id, platform)` — an account may have multiple credentials of the same platform type
-- Index on `account_id` for query performance, consistent with other FK indexes in the project
+- Index on `account_id`:
+  ```sql
+  CREATE INDEX IF NOT EXISTS idx_credentials_account_id ON credentials(account_id);
+  ```
 
 ### Accounts Table
 
@@ -53,8 +56,8 @@ SELECT id, 'instagram_direct', jsonb_build_object(
   'ig_user_id', ig_user_id
 )
 FROM accounts
-WHERE ig_access_token IS NOT NULL
-  AND ig_user_id IS NOT NULL
+WHERE ig_access_token IS NOT NULL AND ig_access_token != ''
+  AND ig_user_id IS NOT NULL AND ig_user_id != ''
   AND id NOT IN (
     SELECT account_id FROM credentials WHERE platform = 'instagram_direct'
   );
@@ -127,7 +130,7 @@ If no `instagram_direct` credentials row exists for the account, fail with a cle
 
 ### Masking
 
-All credential values are masked in GET responses. Apply the existing `maskToken()` utility to each string value in the credentials JSON object individually (e.g., `{ ig_access_token: "igxx...xxAb", ig_user_id: "12...89" }`).
+All credential values are masked in GET responses. Extract the existing `maskToken()` function from `src/routes/accounts.ts` to a shared utility (e.g., `src/utils/mask.ts`) and apply it to each string value in the credentials JSON object individually (e.g., `{ ig_access_token: "igxx...xxAb", ig_user_id: "12...89" }`).
 
 ### Validation
 
