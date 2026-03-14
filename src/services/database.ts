@@ -316,6 +316,46 @@ export class DatabaseService {
             CREATE INDEX IF NOT EXISTS idx_daily_views_day ON daily_views(day)
         `;
 
+        // Create platform enum type
+        await this.sql`
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'platform') THEN
+                    CREATE TYPE platform AS ENUM ('instagram_direct', 'upload_post');
+                END IF;
+            END $$
+        `;
+
+        // Create credentials table
+        await this.sql`
+            CREATE TABLE IF NOT EXISTS credentials (
+                id SERIAL PRIMARY KEY,
+                account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+                platform platform NOT NULL,
+                credentials JSONB NOT NULL,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        `;
+
+        await this.sql`
+            CREATE INDEX IF NOT EXISTS idx_credentials_account_id ON credentials(account_id)
+        `;
+
+        // Migrate existing Instagram credentials from accounts table
+        await this.sql`
+            INSERT INTO credentials (account_id, platform, credentials)
+            SELECT id, 'instagram_direct', jsonb_build_object(
+                'ig_access_token', ig_access_token,
+                'ig_user_id', ig_user_id
+            )
+            FROM accounts
+            WHERE ig_access_token IS NOT NULL AND ig_access_token != ''
+              AND ig_user_id IS NOT NULL AND ig_user_id != ''
+              AND id NOT IN (
+                  SELECT account_id FROM credentials WHERE platform = 'instagram_direct'
+              )
+        `;
+
         logger.info('Database schema initialized');
     }
 
