@@ -54,6 +54,8 @@ export class UploadPostClientService {
                     status: response.status,
                     requestId,
                     platforms,
+                    results: data.results,
+                    response: data,
                 });
                 return { success: true, requestId: requestId || undefined };
             }
