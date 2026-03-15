@@ -42,42 +42,26 @@ function createTools(db: DatabaseService) {
     const fetchPostData = tool(
         async () => {
             const now = new Date();
-            const twentyEightDaysAgo = new Date(
-                now.getTime() - 28 * 24 * 60 * 60 * 1000
+            const sevenDaysAgo = new Date(
+                now.getTime() - 7 * 24 * 60 * 60 * 1000
             );
-            const fiftySixDaysAgo = new Date(
-                now.getTime() - 56 * 24 * 60 * 60 * 1000
-            );
-
-            const accountScopes = [
-                { key: 'combined', id: null },
-                { key: 'main_account', id: 1 },
-                { key: 'backup_account', id: 2 },
-            ] as const;
 
             const [
                 allCombined,
                 allMain,
                 allBackup,
-                last28Combined,
-                last28Main,
-                last28Backup,
-                prev28Combined,
-                prev28Main,
-                prev28Backup,
+                last7Combined,
+                last7Main,
+                last7Backup,
             ] = await Promise.all([
                 // All time: no date filters
                 db.getPostsWithDetails(null, null, null),
                 db.getPostsWithDetails(1, null, null),
                 db.getPostsWithDetails(2, null, null),
-                // Last 28 days
-                db.getPostsWithDetails(null, twentyEightDaysAgo, null),
-                db.getPostsWithDetails(1, twentyEightDaysAgo, null),
-                db.getPostsWithDetails(2, twentyEightDaysAgo, null),
-                // Previous 28 days (28-56 days ago)
-                db.getPostsWithDetails(null, fiftySixDaysAgo, twentyEightDaysAgo),
-                db.getPostsWithDetails(1, fiftySixDaysAgo, twentyEightDaysAgo),
-                db.getPostsWithDetails(2, fiftySixDaysAgo, twentyEightDaysAgo),
+                // Last 7 days
+                db.getPostsWithDetails(null, sevenDaysAgo, null),
+                db.getPostsWithDetails(1, sevenDaysAgo, null),
+                db.getPostsWithDetails(2, sevenDaysAgo, null),
             ]);
 
             const result = {
@@ -86,15 +70,10 @@ function createTools(db: DatabaseService) {
                     main_account: allMain,
                     backup_account: allBackup,
                 },
-                last_28_days: {
-                    combined: last28Combined,
-                    main_account: last28Main,
-                    backup_account: last28Backup,
-                },
-                prev_28_days: {
-                    combined: prev28Combined,
-                    main_account: prev28Main,
-                    backup_account: prev28Backup,
+                last_7_days: {
+                    combined: last7Combined,
+                    main_account: last7Main,
+                    backup_account: last7Backup,
                 },
             };
 
@@ -103,7 +82,7 @@ function createTools(db: DatabaseService) {
         {
             name: 'fetch_post_data',
             description:
-                'Fetch all post data across timeframes (all time, last 28 days, previous 28 days) and accounts (combined, main, backup). Returns detailed post information including video titles, hooks, captions, hashtags, views, and status.',
+                'Fetch all post data across timeframes (all time, last 7 days) and accounts (combined, main, backup). Returns detailed post information including video titles, hooks, captions, hashtags, views, and status.',
             schema: z.object({}),
         }
     );
