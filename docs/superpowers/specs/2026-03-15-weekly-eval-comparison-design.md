@@ -36,6 +36,7 @@ The prompt is updated to:
 - Lead with a **Week-over-Week Summary** section
 - Use all-time data as supporting context rather than primary analysis
 - Keep the existing bullet-points-only style
+- If no previous evaluation exists (first run), skip the Week-over-Week Summary and note this is the first evaluation
 
 **New output structure:**
 
@@ -68,7 +69,9 @@ The prompt is updated to:
   - Update `SYSTEM_PROMPT` constant
   - Update date calculations in `fetch_post_data` tool (7 days instead of 28/56)
   - Remove prev-28-day datasets from the tool
+  - Update `fetch_post_data` tool description string (references "last 28 days, previous 28 days" → "last 7 days")
   - Change `fetch_previous_evaluations` to fetch 1 instead of 10
+  - Update `fetch_previous_evaluations` tool description string (references "10 most recent" → "most recent")
 
 ## What stays the same
 
