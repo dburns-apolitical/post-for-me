@@ -100,12 +100,17 @@ async function processPostInBackground(
         // Upload-Post posting (if credentials exist)
         if (upCredential) {
             const upCreds = upCredential.credentials as UploadPostCredentials;
-            const uploadPostPlatforms: string[] = ['youtube'];
-            if (!igCredential) {
-                uploadPostPlatforms.push('instagram');
+            const uploadPostPlatforms: string[] = [];
+            if (upCreds.youtube) uploadPostPlatforms.push('youtube');
+            if (upCreds.tiktok) uploadPostPlatforms.push('tiktok');
+            if (upCreds.twitter) uploadPostPlatforms.push('x');
+            if (upCreds.instagram && !igCredential) uploadPostPlatforms.push('instagram');
+
+            if (uploadPostPlatforms.length === 0) {
+                logger.warn('Upload-Post credentials exist but no platforms enabled, skipping', { postId });
             }
 
-            const upPromise = (async () => {
+            const upPromise = uploadPostPlatforms.length === 0 ? Promise.resolve() : (async () => {
                 const uploadPostClient = new UploadPostClientService(upCreds.api_key, upCreds.user);
 
                 logger.info('Posting video to Upload-Post', { postId, platforms: uploadPostPlatforms });

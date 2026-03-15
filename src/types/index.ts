@@ -140,6 +140,10 @@ export interface InstagramDirectCredentials {
 export interface UploadPostCredentials {
     api_key: string;
     user: string;
+    instagram: boolean;
+    youtube: boolean;
+    tiktok: boolean;
+    twitter: boolean;
 }
 
 export interface DbCredential {

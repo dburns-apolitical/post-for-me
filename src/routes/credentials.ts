@@ -15,6 +15,10 @@ const instagramDirectCredentialsSchema = z.object({
 const uploadPostCredentialsSchema = z.object({
     api_key: z.string().min(1, 'Upload-Post API key is required'),
     user: z.string().min(1, 'Upload-Post user is required'),
+    instagram: z.boolean(),
+    youtube: z.boolean(),
+    tiktok: z.boolean(),
+    twitter: z.boolean(),
 });
 
 const createCredentialSchema = z.object({
