@@ -89,13 +89,13 @@ function createTools(db: DatabaseService) {
 
     const fetchPreviousEvaluations = tool(
         async () => {
-            const evaluations = await db.getRecentEvaluations(10);
+            const evaluations = await db.getRecentEvaluations(1);
             return JSON.stringify(evaluations);
         },
         {
             name: 'fetch_previous_evaluations',
             description:
-                'Fetch the 10 most recent agent evaluations to understand previous recommendations and whether they were followed.',
+                'Fetch the most recent agent evaluation to use as a comparison baseline for week-over-week analysis.',
             schema: z.object({}),
         }
     );
