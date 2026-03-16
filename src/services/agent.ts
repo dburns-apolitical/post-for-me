@@ -16,7 +16,7 @@ Video titles follow the format: [video-type]-[song-name]-[song-section]
 Example: "fisheye-weather-ch1" = fisheye-lens video, song "weather", first chorus clip.
 
 Steps:
-1. Fetch the post data — your primary analysis window is the last 7 days. All-time data is available for historical context.
+1. Fetch the post data — your primary analysis window is the last 7 days (2–9 days ago, to ensure views are synced). Only posts with synced view counts are included. All-time data is available for historical context.
 2. Fetch the previous evaluation to use as your comparison baseline.
 3. Compare this week's data against the previous evaluation and produce a report in exactly this format (be succinct — bullet points only, no prose):
 
@@ -51,9 +51,14 @@ function createTools(db: DatabaseService) {
     const fetchPostData = tool(
         async () => {
             const now = new Date();
-            const sevenDaysAgo = new Date(
-                now.getTime() - 7 * 24 * 60 * 60 * 1000
+            const twoDaysAgo = new Date(
+                now.getTime() - 2 * 24 * 60 * 60 * 1000
             );
+            const nineDaysAgo = new Date(
+                now.getTime() - 9 * 24 * 60 * 60 * 1000
+            );
+
+            const hasSyncedViews = (post: any) => post.views != null;
 
             const [
                 allCombined,
@@ -67,11 +72,11 @@ function createTools(db: DatabaseService) {
                 db.getPostsWithDetails(null, null, null),
                 db.getPostsWithDetails(1, null, null),
                 db.getPostsWithDetails(2, null, null),
-                // Last 7 days
-                db.getPostsWithDetails(null, sevenDaysAgo, null),
-                db.getPostsWithDetails(1, sevenDaysAgo, null),
-                db.getPostsWithDetails(2, sevenDaysAgo, null),
-            ]);
+                // 2-9 days ago (7 days of synced data)
+                db.getPostsWithDetails(null, nineDaysAgo, twoDaysAgo),
+                db.getPostsWithDetails(1, nineDaysAgo, twoDaysAgo),
+                db.getPostsWithDetails(2, nineDaysAgo, twoDaysAgo),
+            ]).then(results => results.map(posts => posts.filter(hasSyncedViews)));
 
             const result = {
                 all_time: {
@@ -91,7 +96,7 @@ function createTools(db: DatabaseService) {
         {
             name: 'fetch_post_data',
             description:
-                'Fetch all post data across timeframes (all time, last 7 days) and accounts (combined, main, backup). Returns detailed post information including video titles, hooks, captions, hashtags, views, and status.',
+                'Fetch all post data across timeframes (all time, 2-9 days ago) and accounts (combined, main, backup). Only includes posts with synced view counts. Returns detailed post information including video titles, hooks, captions, hashtags, views, and status.',
             schema: z.object({}),
         }
     );
