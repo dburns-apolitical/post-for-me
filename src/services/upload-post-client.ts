@@ -148,14 +148,15 @@ export class UploadPostClientService {
         return { success: false, requestId };
     }
 
+    /**
+     * Throws on API failure or missing views data so callers can handle per-post errors.
+     */
     async getPostAnalytics(platformPostId: string): Promise<number> {
         const url = `${this.baseUrl}/uploadposts/post-analytics?platform_post_id=${encodeURIComponent(platformPostId)}&platform=instagram&user=${encodeURIComponent(this.user)}`;
 
         const response = await fetch(url, {
             headers: { 'Authorization': `Apikey ${this.apiKey}` },
         });
-
-        const data = await response.json() as Record<string, unknown>;
 
         if (!response.ok) {
             logger.error('Upload-Post post-analytics request failed', {
@@ -164,6 +165,8 @@ export class UploadPostClientService {
             });
             throw new Error(`Failed to fetch post analytics: ${response.status}`);
         }
+
+        const data = await response.json() as Record<string, unknown>;
 
         const platforms = data.platforms as Record<string, Record<string, unknown>> | undefined;
         const postMetrics = platforms?.instagram?.post_metrics as Record<string, unknown> | undefined;

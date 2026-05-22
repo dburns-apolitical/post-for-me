@@ -40,7 +40,7 @@ describe('UploadPostClientService', () => {
             })) as typeof fetch;
 
             const client = new UploadPostClientService('test-api-key', 'test-user');
-            await expect(client.getPostAnalytics('ig-post-123')).rejects.toThrow();
+            await expect(client.getPostAnalytics('ig-post-123')).rejects.toThrow('Failed to fetch post analytics: 401');
         });
 
         test('throws when views field is absent in response', async () => {
