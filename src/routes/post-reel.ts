@@ -121,6 +121,10 @@ async function processPostInBackground(
                     uploadPostPlatforms
                 );
 
+                if (result.instagramPostId && !instagramPostId) {
+                    instagramPostId = result.instagramPostId;
+                }
+
                 if (!result.success && !igCredential) {
                     throw new Error('Upload-Post posting failed and no instagram_direct fallback');
                 }
