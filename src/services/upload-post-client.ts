@@ -79,7 +79,7 @@ export class UploadPostClientService {
 
             const igResult = (data.results as Record<string, Record<string, unknown>> | undefined)?.instagram;
             const instagramPostId = (igResult?.post_id ?? igResult?.publish_id) as string | undefined;
-            return { success: true, requestId: requestId || undefined, instagramPostId: instagramPostId || undefined };
+            return { success: true, requestId: requestId || undefined, instagramPostId };
         } catch (error) {
             logger.error('Error calling Upload-Post API', {
                 error: error instanceof Error ? error.message : 'Unknown error',
@@ -132,7 +132,7 @@ export class UploadPostClientService {
                 if (status === 'completed') {
                     const igResult = (data.results as Record<string, Record<string, unknown>> | undefined)?.instagram;
                     const instagramPostId = (igResult?.post_id ?? igResult?.publish_id) as string | undefined;
-                    return { success: true, requestId, instagramPostId: instagramPostId || undefined };
+                    return { success: true, requestId, instagramPostId };
                 }
 
                 if (status !== 'pending' && status !== 'in_progress') {
