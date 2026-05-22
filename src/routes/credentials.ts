@@ -191,7 +191,7 @@ export async function handleCredentialById(request: Request, credentialId: numbe
                 success: true,
                 credential: {
                     ...credential,
-                    credentials: maskCredentials(credential!.credentials as unknown as Record<string, unknown>),
+                    credentials: maskCredentials(credential.credentials as unknown as Record<string, unknown>),
                 },
             });
         }
