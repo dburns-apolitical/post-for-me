@@ -68,8 +68,8 @@ describe('ViewsSyncCronService', () => {
             { id: 20, ig_access_token: 'token2', ig_user_id: 'user2' },
         ]);
         mockGetCredentialsByPlatform
-            .mockResolvedValueOnce({ id: 1, account_id: 10, platform: 'instagram_direct' as Platform, credentials: { ig_access_token: 'token1', ig_user_id: 'user1' }, created_at: new Date() })
-            .mockResolvedValueOnce({ id: 2, account_id: 20, platform: 'instagram_direct' as Platform, credentials: { ig_access_token: 'token2', ig_user_id: 'user2' }, created_at: new Date() });
+            .mockResolvedValueOnce({ id: 1, account_id: 10, platform: 'instagram_direct' as Platform, credentials: { ig_access_token: 'token1', ig_user_id: 'user1' }, active: true, created_at: new Date() })
+            .mockResolvedValueOnce({ id: 2, account_id: 20, platform: 'instagram_direct' as Platform, credentials: { ig_access_token: 'token2', ig_user_id: 'user2' }, active: true, created_at: new Date() });
         mockGetMediaInsights
             .mockResolvedValueOnce(200)
             .mockResolvedValueOnce(300)
@@ -102,7 +102,7 @@ describe('ViewsSyncCronService', () => {
             { id: 10, ig_access_token: 'token1', ig_user_id: 'user1' },
         ]);
         mockGetCredentialsByPlatform.mockResolvedValueOnce(
-            { id: 1, account_id: 10, platform: 'instagram_direct' as Platform, credentials: { ig_access_token: 'token1', ig_user_id: 'user1' }, created_at: new Date() }
+            { id: 1, account_id: 10, platform: 'instagram_direct' as Platform, credentials: { ig_access_token: 'token1', ig_user_id: 'user1' }, active: true, created_at: new Date() }
         );
         mockGetMediaInsights.mockResolvedValueOnce(200);
 

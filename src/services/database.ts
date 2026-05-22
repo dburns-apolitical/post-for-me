@@ -343,6 +343,18 @@ export class DatabaseService {
             CREATE INDEX IF NOT EXISTS idx_credentials_account_id ON credentials(account_id)
         `;
 
+        await this.sql`
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'credentials' AND column_name = 'active'
+                ) THEN
+                    ALTER TABLE credentials ADD COLUMN active BOOLEAN NOT NULL DEFAULT TRUE;
+                END IF;
+            END $$
+        `;
+
         // Migrate existing Instagram credentials from accounts table
         await this.sql`
             INSERT INTO credentials (account_id, platform, credentials)
@@ -831,7 +843,7 @@ export class DatabaseService {
 
     async getCredentialsByAccountId(accountId: number): Promise<DbCredential[]> {
         return await this.sql`
-            SELECT id, account_id, platform, credentials, created_at
+            SELECT id, account_id, platform, credentials, active, created_at
             FROM credentials
             WHERE account_id = ${accountId}
             ORDER BY created_at DESC
@@ -840,9 +852,9 @@ export class DatabaseService {
 
     async getCredentialsByPlatform(accountId: number, platform: Platform): Promise<DbCredential | null> {
         const result = await this.sql`
-            SELECT id, account_id, platform, credentials, created_at
+            SELECT id, account_id, platform, credentials, active, created_at
             FROM credentials
-            WHERE account_id = ${accountId} AND platform = ${platform}
+            WHERE account_id = ${accountId} AND platform = ${platform} AND active = TRUE
             ORDER BY created_at DESC
             LIMIT 1
         ` as DbCredential[];
@@ -853,7 +865,7 @@ export class DatabaseService {
         const result = await this.sql`
             INSERT INTO credentials (account_id, platform, credentials)
             VALUES (${accountId}, ${platform}, ${JSON.stringify(credentials)})
-            RETURNING id, account_id, platform, credentials, created_at
+            RETURNING id, account_id, platform, credentials, active, created_at
         ` as DbCredential[];
         return result[0];
     }
@@ -863,7 +875,17 @@ export class DatabaseService {
             UPDATE credentials
             SET credentials = ${JSON.stringify(credentials)}
             WHERE id = ${id}
-            RETURNING id, account_id, platform, credentials, created_at
+            RETURNING id, account_id, platform, credentials, active, created_at
+        ` as DbCredential[];
+        return result.length > 0 ? result[0] : null;
+    }
+
+    async updateCredentialActive(id: number, active: boolean): Promise<DbCredential | null> {
+        const result = await this.sql`
+            UPDATE credentials
+            SET active = ${active}
+            WHERE id = ${id}
+            RETURNING id, account_id, platform, credentials, active, created_at
         ` as DbCredential[];
         return result.length > 0 ? result[0] : null;
     }
@@ -877,7 +899,7 @@ export class DatabaseService {
 
     async getCredential(id: number): Promise<DbCredential | null> {
         const result = await this.sql`
-            SELECT id, account_id, platform, credentials, created_at
+            SELECT id, account_id, platform, credentials, active, created_at
             FROM credentials
             WHERE id = ${id}
         ` as DbCredential[];
