@@ -603,4 +603,58 @@ describe('DatabaseService', () => {
             expect(result).toBeNull();
         });
     });
+
+    describe('getCredentialsByPlatform', () => {
+        test('returns active credential for matching platform', async () => {
+            const mockCredential = {
+                id: 1,
+                account_id: 1,
+                platform: 'instagram_direct' as Platform,
+                credentials: { ig_access_token: 'tok', ig_user_id: 'uid' },
+                active: true,
+                created_at: new Date(),
+            };
+            mockSql.mockResolvedValueOnce([mockCredential]);
+
+            const result = await db.getCredentialsByPlatform(1, 'instagram_direct');
+
+            expect(result).toEqual(mockCredential);
+            expect(result?.active).toBe(true);
+        });
+
+        test('returns null when no active credential exists', async () => {
+            mockSql.mockResolvedValueOnce([]);
+
+            const result = await db.getCredentialsByPlatform(1, 'instagram_direct');
+
+            expect(result).toBeNull();
+        });
+    });
+
+    describe('updateCredentialActive', () => {
+        test('returns updated credential with new active value', async () => {
+            const mockCredential = {
+                id: 1,
+                account_id: 1,
+                platform: 'instagram_direct' as Platform,
+                credentials: { ig_access_token: 'tok', ig_user_id: 'uid' },
+                active: false,
+                created_at: new Date(),
+            };
+            mockSql.mockResolvedValueOnce([mockCredential]);
+
+            const result = await db.updateCredentialActive(1, false);
+
+            expect(result).toEqual(mockCredential);
+            expect(result?.active).toBe(false);
+        });
+
+        test('returns null when credential not found', async () => {
+            mockSql.mockResolvedValueOnce([]);
+
+            const result = await db.updateCredentialActive(999, false);
+
+            expect(result).toBeNull();
+        });
+    });
 });
