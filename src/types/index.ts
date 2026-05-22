@@ -151,6 +151,7 @@ export interface DbCredential {
     account_id: number;
     platform: Platform;
     credentials: InstagramDirectCredentials | UploadPostCredentials;
+    active: boolean;
     created_at: Date;
 }
 
