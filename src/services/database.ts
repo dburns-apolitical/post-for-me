@@ -318,6 +318,23 @@ export class DatabaseService {
             CREATE INDEX IF NOT EXISTS idx_daily_views_day ON daily_views(day)
         `;
 
+        await this.sql`
+            CREATE TABLE IF NOT EXISTS daily_impressions (
+                id         SERIAL PRIMARY KEY,
+                account_id INTEGER NOT NULL REFERENCES accounts(id),
+                day        DATE NOT NULL,
+                instagram  INTEGER NOT NULL DEFAULT 0,
+                youtube    INTEGER NOT NULL DEFAULT 0,
+                tiktok     INTEGER NOT NULL DEFAULT 0,
+                twitter    INTEGER NOT NULL DEFAULT 0,
+                UNIQUE(account_id, day)
+            )
+        `;
+
+        await this.sql`
+            CREATE INDEX IF NOT EXISTS idx_daily_impressions_day ON daily_impressions(day)
+        `;
+
         // Create platform enum type
         await this.sql`
             DO $$
@@ -1340,6 +1357,33 @@ export class DatabaseService {
             DO UPDATE SET
                 views = daily_views.views + EXCLUDED.views,
                 post_count = daily_views.post_count + EXCLUDED.post_count
+        `;
+    }
+
+    /**
+     * Insert or update daily impressions aggregate for an account
+     */
+    async insertDailyImpressions(
+        accountId: number,
+        day: Date,
+        counts: { instagram: number; youtube: number; tiktok: number; twitter: number }
+    ): Promise<void> {
+        await this.sql`
+            INSERT INTO daily_impressions (account_id, day, instagram, youtube, tiktok, twitter)
+            VALUES (
+                ${accountId},
+                ${day.toISOString().split('T')[0]},
+                ${counts.instagram},
+                ${counts.youtube},
+                ${counts.tiktok},
+                ${counts.twitter}
+            )
+            ON CONFLICT (account_id, day)
+            DO UPDATE SET
+                instagram = EXCLUDED.instagram,
+                youtube   = EXCLUDED.youtube,
+                tiktok    = EXCLUDED.tiktok,
+                twitter   = EXCLUDED.twitter
         `;
     }
 }
