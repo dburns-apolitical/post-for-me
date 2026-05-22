@@ -1,7 +1,6 @@
 import { describe, test, expect, mock, beforeEach } from 'bun:test';
 import type { DbCredential, Platform } from '../../src/types/index';
 
-// Mock dependencies before importing
 const mockGetPostsNeedingViewsUpdate = mock(
     (): Promise<{ id: number; account_id: number; instagram_post_id: string | null }[]> => Promise.resolve([])
 );
@@ -24,12 +23,12 @@ mock.module('../../src/services/database', () => ({
     },
 }));
 
-const mockGetMediaInsights = mock(() => Promise.resolve(100));
+const mockGetPostAnalytics = mock(() => Promise.resolve(100));
 
-mock.module('../../src/services/instagram-client', () => ({
-    InstagramClientService: class {
+mock.module('../../src/services/upload-post-client', () => ({
+    UploadPostClientService: class {
         constructor() {}
-        getMediaInsights = mockGetMediaInsights;
+        getPostAnalytics = mockGetPostAnalytics;
     },
 }));
 
@@ -43,7 +42,7 @@ describe('ViewsSyncCronService', () => {
         mockGetAccounts.mockClear();
         mockUpdatePostViews.mockClear();
         mockInsertDailyViews.mockClear();
-        mockGetMediaInsights.mockClear();
+        mockGetPostAnalytics.mockClear();
         mockGetCredentialsByPlatform.mockClear();
         service = new ViewsSyncCronService();
     });
@@ -68,9 +67,17 @@ describe('ViewsSyncCronService', () => {
             { id: 20, ig_access_token: 'token2', ig_user_id: 'user2' },
         ]);
         mockGetCredentialsByPlatform
-            .mockResolvedValueOnce({ id: 1, account_id: 10, platform: 'instagram_direct' as Platform, credentials: { ig_access_token: 'token1', ig_user_id: 'user1' }, active: true, created_at: new Date() })
-            .mockResolvedValueOnce({ id: 2, account_id: 20, platform: 'instagram_direct' as Platform, credentials: { ig_access_token: 'token2', ig_user_id: 'user2' }, active: true, created_at: new Date() });
-        mockGetMediaInsights
+            .mockResolvedValueOnce({
+                id: 1, account_id: 10, platform: 'upload_post' as Platform,
+                credentials: { api_key: 'key1', user: 'upuser1', instagram: true, youtube: false, tiktok: false, twitter: false },
+                active: true, created_at: new Date(),
+            })
+            .mockResolvedValueOnce({
+                id: 2, account_id: 20, platform: 'upload_post' as Platform,
+                credentials: { api_key: 'key2', user: 'upuser2', instagram: true, youtube: false, tiktok: false, twitter: false },
+                active: true, created_at: new Date(),
+            });
+        mockGetPostAnalytics
             .mockResolvedValueOnce(200)
             .mockResolvedValueOnce(300)
             .mockResolvedValueOnce(150);
@@ -80,13 +87,11 @@ describe('ViewsSyncCronService', () => {
         expect(result).toEqual({ updated: 3, failed: 0 });
         expect(mockInsertDailyViews).toHaveBeenCalledTimes(2);
 
-        // Account 10: 200 + 300 = 500 views, 2 posts
         const call1Args = mockInsertDailyViews.mock.calls[0];
         expect(call1Args[0]).toBe(10);
         expect(call1Args[2]).toBe(500);
         expect(call1Args[3]).toBe(2);
 
-        // Account 20: 150 views, 1 post
         const call2Args = mockInsertDailyViews.mock.calls[1];
         expect(call2Args[0]).toBe(20);
         expect(call2Args[2]).toBe(150);
@@ -101,10 +106,12 @@ describe('ViewsSyncCronService', () => {
         mockGetAccounts.mockResolvedValueOnce([
             { id: 10, ig_access_token: 'token1', ig_user_id: 'user1' },
         ]);
-        mockGetCredentialsByPlatform.mockResolvedValueOnce(
-            { id: 1, account_id: 10, platform: 'instagram_direct' as Platform, credentials: { ig_access_token: 'token1', ig_user_id: 'user1' }, active: true, created_at: new Date() }
-        );
-        mockGetMediaInsights.mockResolvedValueOnce(200);
+        mockGetCredentialsByPlatform.mockResolvedValueOnce({
+            id: 1, account_id: 10, platform: 'upload_post' as Platform,
+            credentials: { api_key: 'key1', user: 'upuser1', instagram: true, youtube: false, tiktok: false, twitter: false },
+            active: true, created_at: new Date(),
+        });
+        mockGetPostAnalytics.mockResolvedValueOnce(200);
 
         const result = await service.syncViews();
 

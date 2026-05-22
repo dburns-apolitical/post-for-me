@@ -1,7 +1,7 @@
 import { DatabaseService } from './database.js';
-import { InstagramClientService } from './instagram-client.js';
+import { UploadPostClientService } from './upload-post-client.js';
 import { logger } from '../utils/logger.js';
-import type { InstagramDirectCredentials } from '../types/index.js';
+import type { UploadPostCredentials } from '../types/index.js';
 
 export class ViewsSyncCronService {
     private timer: Timer | null = null;
@@ -78,11 +78,12 @@ export class ViewsSyncCronService {
             const accountMap = new Map(accounts.map(a => [a.id, a]));
 
             // Pre-load credentials for all accounts
-            const credentialMap = new Map<number, { ig_access_token: string; ig_user_id: string }>();
+            const credentialMap = new Map<number, { api_key: string; user: string }>();
             for (const account of accounts) {
-                const credential = await this.db.getCredentialsByPlatform(account.id, 'instagram_direct');
+                const credential = await this.db.getCredentialsByPlatform(account.id, 'upload_post');
                 if (credential) {
-                    credentialMap.set(account.id, credential.credentials as InstagramDirectCredentials);
+                    const creds = credential.credentials as UploadPostCredentials;
+                    credentialMap.set(account.id, { api_key: creds.api_key, user: creds.user });
                 }
             }
 
@@ -106,12 +107,12 @@ export class ViewsSyncCronService {
 
                     const creds = credentialMap.get(post.account_id);
                     if (!creds) {
-                        logger.warn('No instagram_direct credentials found for account, skipping', { accountId: post.account_id });
+                        logger.warn('No upload_post credentials found for account, skipping', { accountId: post.account_id });
                         failed++;
                         continue;
                     }
-                    const instagram = new InstagramClientService(creds.ig_access_token, creds.ig_user_id);
-                    const views = await instagram.getMediaInsights(post.instagram_post_id);
+                    const uploadPost = new UploadPostClientService(creds.api_key, creds.user);
+                    const views = await uploadPost.getPostAnalytics(post.instagram_post_id);
                     await this.db.updatePostViews(post.id, views);
 
                     // Accumulate for daily_views
