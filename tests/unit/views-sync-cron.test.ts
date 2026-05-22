@@ -1,4 +1,4 @@
-import { describe, test, expect, mock, beforeEach } from 'bun:test';
+import { describe, test, expect, mock, beforeEach, afterAll } from 'bun:test';
 import type { DbCredential, Platform } from '../../src/types/index';
 
 const mockGetPostsNeedingViewsUpdate = mock(
@@ -119,5 +119,13 @@ describe('ViewsSyncCronService', () => {
         expect(mockInsertDailyViews).toHaveBeenCalledTimes(1);
         expect(mockInsertDailyViews.mock.calls[0][2]).toBe(200);
         expect(mockInsertDailyViews.mock.calls[0][3]).toBe(1);
+    });
+});
+
+afterAll(async () => {
+    const resolvedPath = require.resolve('../../src/services/upload-post-client');
+    delete require.cache[resolvedPath];
+    await mock.module('../../src/services/upload-post-client', async () => {
+        return import(`../../src/services/upload-post-client?t=${Date.now()}`);
     });
 });
