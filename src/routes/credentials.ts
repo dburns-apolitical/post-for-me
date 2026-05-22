@@ -3,7 +3,7 @@ import { validateAuth, unauthorizedResponse, forbiddenResponse } from '../utils/
 import { DatabaseService } from '../services/database.js';
 import { maskCredentials } from '../utils/mask.js';
 import { z } from 'zod';
-import type { Platform, InstagramDirectCredentials, UploadPostCredentials } from '../types/index.js';
+import type { Platform, InstagramDirectCredentials, UploadPostCredentials, DbCredential } from '../types/index.js';
 
 const platformValues: [Platform, ...Platform[]] = ['instagram_direct', 'upload_post'];
 
@@ -38,8 +38,12 @@ const createCredentialSchema = z.object({
 );
 
 const updateCredentialSchema = z.object({
-    credentials: z.record(z.unknown()),
-});
+    credentials: z.record(z.unknown()).optional(),
+    active: z.boolean().optional(),
+}).refine(
+    (data) => data.credentials !== undefined || data.active !== undefined,
+    { message: 'At least one of credentials or active must be provided' }
+);
 
 export async function handleAccountCredentials(request: Request, accountId: number): Promise<Response> {
     const authResult = await validateAuth(request);
@@ -138,42 +142,56 @@ export async function handleCredentialById(request: Request, credentialId: numbe
                 );
             }
 
-            // Validate credentials shape based on platform
-            if (existing.platform === 'instagram_direct') {
-                const platformValidation = instagramDirectCredentialsSchema.safeParse(parsed.data.credentials);
-                if (!platformValidation.success) {
+            let credential: DbCredential | null = existing;
+
+            if (parsed.data.credentials !== undefined) {
+                if (existing.platform === 'instagram_direct') {
+                    const platformValidation = instagramDirectCredentialsSchema.safeParse(parsed.data.credentials);
+                    if (!platformValidation.success) {
+                        return Response.json(
+                            { success: false, error: platformValidation.error.errors[0].message },
+                            { status: 400 }
+                        );
+                    }
+                } else if (existing.platform === 'upload_post') {
+                    const platformValidation = uploadPostCredentialsSchema.safeParse(parsed.data.credentials);
+                    if (!platformValidation.success) {
+                        return Response.json(
+                            { success: false, error: platformValidation.error.errors[0].message },
+                            { status: 400 }
+                        );
+                    }
+                } else {
                     return Response.json(
-                        { success: false, error: platformValidation.error.errors[0].message },
+                        { success: false, error: `Unknown platform: ${existing.platform}` },
                         { status: 400 }
                     );
                 }
-            } else if (existing.platform === 'upload_post') {
-                const platformValidation = uploadPostCredentialsSchema.safeParse(parsed.data.credentials);
-                if (!platformValidation.success) {
+
+                credential = await db.updateCredential(credentialId, parsed.data.credentials as unknown as (InstagramDirectCredentials | UploadPostCredentials));
+                if (!credential) {
                     return Response.json(
-                        { success: false, error: platformValidation.error.errors[0].message },
-                        { status: 400 }
+                        { success: false, error: 'Credential not found' },
+                        { status: 404 }
                     );
                 }
-            } else {
-                return Response.json(
-                    { success: false, error: `Unknown platform: ${existing.platform}` },
-                    { status: 400 }
-                );
             }
 
-            const credential = await db.updateCredential(credentialId, parsed.data.credentials as unknown as (InstagramDirectCredentials | UploadPostCredentials));
-            if (!credential) {
-                return Response.json(
-                    { success: false, error: 'Credential not found' },
-                    { status: 404 }
-                );
+            if (parsed.data.active !== undefined) {
+                credential = await db.updateCredentialActive(credentialId, parsed.data.active);
+                if (!credential) {
+                    return Response.json(
+                        { success: false, error: 'Credential not found' },
+                        { status: 404 }
+                    );
+                }
             }
+
             return Response.json({
                 success: true,
                 credential: {
                     ...credential,
-                    credentials: maskCredentials(credential.credentials as unknown as Record<string, unknown>),
+                    credentials: maskCredentials(credential!.credentials as unknown as Record<string, unknown>),
                 },
             });
         }
