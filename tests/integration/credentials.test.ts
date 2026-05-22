@@ -36,6 +36,15 @@ describe('Credentials Endpoints', () => {
             });
             expect(response.status).toBe(401);
         });
+
+        test('should return 401 when toggling active without authentication', async () => {
+            const response = await fetch(`${BASE_URL}/api/credentials/1`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ active: false }),
+            });
+            expect(response.status).toBe(401);
+        });
     });
 
     describe('DELETE /api/credentials/:id', () => {
