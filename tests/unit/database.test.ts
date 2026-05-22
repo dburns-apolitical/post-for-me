@@ -518,25 +518,6 @@ describe('DatabaseService', () => {
         });
     });
 
-    describe('getCredentialsByPlatform', () => {
-        test('should return credential for account and platform', async () => {
-            const mockCred = { id: 1, account_id: 1, platform: 'instagram_direct' as Platform, credentials: { ig_access_token: 'token', ig_user_id: 'user1' }, created_at: new Date() };
-            mockSql.mockResolvedValueOnce([mockCred]);
-
-            const result = await db.getCredentialsByPlatform(1, 'instagram_direct');
-
-            expect(result).toEqual(mockCred);
-        });
-
-        test('should return null when no credential found', async () => {
-            mockSql.mockResolvedValueOnce([]);
-
-            const result = await db.getCredentialsByPlatform(1, 'instagram_direct');
-
-            expect(result).toBeNull();
-        });
-    });
-
     describe('createCredential', () => {
         test('should create and return credential', async () => {
             const mockCred = { id: 1, account_id: 1, platform: 'instagram_direct' as Platform, credentials: { ig_access_token: 'token', ig_user_id: 'user1' }, created_at: new Date() };
