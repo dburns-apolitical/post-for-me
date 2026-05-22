@@ -19,7 +19,7 @@ export class UploadPostClientService {
         caption: string,
         hashtags: string[],
         platforms: string[]
-    ): Promise<{ success: boolean; requestId?: string }> {
+    ): Promise<{ success: boolean; requestId?: string; instagramPostId?: string }> {
         try {
             const hashtagString = hashtags.map((tag) => `#${tag}`).join(' ');
             const fullCaption = `${caption}\n\n${hashtagString}`;
@@ -77,7 +77,9 @@ export class UploadPostClientService {
                 response: data,
             });
 
-            return { success: true, requestId: requestId || undefined };
+            const igResult = (data.results as Record<string, Record<string, unknown>> | undefined)?.instagram;
+            const instagramPostId = (igResult?.post_id ?? igResult?.publish_id) as string | undefined;
+            return { success: true, requestId: requestId || undefined, instagramPostId: instagramPostId || undefined };
         } catch (error) {
             logger.error('Error calling Upload-Post API', {
                 error: error instanceof Error ? error.message : 'Unknown error',
@@ -96,7 +98,7 @@ export class UploadPostClientService {
         platforms: string[],
         maxAttempts: number = 20,
         intervalMs: number = 15000
-    ): Promise<{ success: boolean; requestId?: string }> {
+    ): Promise<{ success: boolean; requestId?: string; instagramPostId?: string }> {
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
             await new Promise((resolve) => setTimeout(resolve, intervalMs));
 
@@ -128,12 +130,14 @@ export class UploadPostClientService {
                 });
 
                 if (status === 'completed') {
-                    return { success: true, requestId };
+                    const igResult = (data.results as Record<string, Record<string, unknown>> | undefined)?.instagram;
+                    const instagramPostId = (igResult?.post_id ?? igResult?.publish_id) as string | undefined;
+                    return { success: true, requestId, instagramPostId: instagramPostId || undefined };
                 }
 
                 if (status !== 'pending' && status !== 'in_progress') {
                     logger.error('Upload-Post unexpected status', { requestId, status, data });
-                    return { success: false, requestId };
+                    return { success: false, requestId, instagramPostId: undefined };
                 }
             } catch (error) {
                 logger.warn('Upload-Post status poll error', {
@@ -145,7 +149,7 @@ export class UploadPostClientService {
         }
 
         logger.error('Upload-Post polling timed out', { requestId, maxAttempts, platforms });
-        return { success: false, requestId };
+        return { success: false, requestId, instagramPostId: undefined };
     }
 
     /**

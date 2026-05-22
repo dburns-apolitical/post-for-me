@@ -55,4 +55,60 @@ describe('UploadPostClientService', () => {
             await expect(client.getPostAnalytics('ig-post-123')).rejects.toThrow('Views metric not found in post analytics response for post ig-post-123');
         });
     });
+
+    describe('postVideo instagramPostId extraction', () => {
+        test('returns instagramPostId from sync response results.instagram.post_id', async () => {
+            globalThis.fetch = mock(() => Promise.resolve({
+                ok: true,
+                json: () => Promise.resolve({
+                    request_id: 'req-123',
+                    results: {
+                        instagram: { post_id: 'ig-456', success: true },
+                    },
+                }),
+            })) as typeof fetch;
+
+            const client = new UploadPostClientService('test-api-key', 'test-user');
+            const result = await client.postVideo('https://video.url', 'caption', [], ['instagram']);
+
+            expect(result.success).toBe(true);
+            expect(result.instagramPostId).toBe('ig-456');
+        });
+
+        test('falls back to publish_id when post_id is absent', async () => {
+            globalThis.fetch = mock(() => Promise.resolve({
+                ok: true,
+                json: () => Promise.resolve({
+                    request_id: 'req-123',
+                    results: {
+                        instagram: { publish_id: 'pub-789', success: true },
+                    },
+                }),
+            })) as typeof fetch;
+
+            const client = new UploadPostClientService('test-api-key', 'test-user');
+            const result = await client.postVideo('https://video.url', 'caption', [], ['instagram']);
+
+            expect(result.success).toBe(true);
+            expect(result.instagramPostId).toBe('pub-789');
+        });
+
+        test('returns undefined instagramPostId when Instagram is not in results', async () => {
+            globalThis.fetch = mock(() => Promise.resolve({
+                ok: true,
+                json: () => Promise.resolve({
+                    request_id: 'req-123',
+                    results: {
+                        youtube: { video_id: 'yt-123', success: true },
+                    },
+                }),
+            })) as typeof fetch;
+
+            const client = new UploadPostClientService('test-api-key', 'test-user');
+            const result = await client.postVideo('https://video.url', 'caption', [], ['youtube']);
+
+            expect(result.success).toBe(true);
+            expect(result.instagramPostId).toBeUndefined();
+        });
+    });
 });
