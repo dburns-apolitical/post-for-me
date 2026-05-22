@@ -147,4 +147,33 @@ export class UploadPostClientService {
         logger.error('Upload-Post polling timed out', { requestId, maxAttempts, platforms });
         return { success: false, requestId };
     }
+
+    async getPostAnalytics(platformPostId: string): Promise<number> {
+        const url = `${this.baseUrl}/uploadposts/post-analytics?platform_post_id=${encodeURIComponent(platformPostId)}&platform=instagram&user=${encodeURIComponent(this.user)}`;
+
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Apikey ${this.apiKey}` },
+        });
+
+        const data = await response.json() as Record<string, unknown>;
+
+        if (!response.ok) {
+            logger.error('Upload-Post post-analytics request failed', {
+                status: response.status,
+                platformPostId,
+            });
+            throw new Error(`Failed to fetch post analytics: ${response.status}`);
+        }
+
+        const platforms = data.platforms as Record<string, Record<string, unknown>> | undefined;
+        const postMetrics = platforms?.instagram?.post_metrics as Record<string, unknown> | undefined;
+        const views = postMetrics?.views;
+
+        if (typeof views !== 'number') {
+            throw new Error(`Views metric not found in post analytics response for post ${platformPostId}`);
+        }
+
+        logger.debug('Retrieved post analytics', { platformPostId, views });
+        return views;
+    }
 }
