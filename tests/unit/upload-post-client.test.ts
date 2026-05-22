@@ -52,7 +52,7 @@ describe('UploadPostClientService', () => {
             })) as typeof fetch;
 
             const client = new UploadPostClientService('test-api-key', 'test-user');
-            await expect(client.getPostAnalytics('ig-post-123')).rejects.toThrow('Views metric not found');
+            await expect(client.getPostAnalytics('ig-post-123')).rejects.toThrow('Views metric not found in post analytics response for post ig-post-123');
         });
     });
 });

@@ -149,6 +149,8 @@ export class UploadPostClientService {
     }
 
     /**
+     * Fetches the Instagram view count for a post via the Upload-Post analytics API.
+     * Instagram-only: hardcodes platform=instagram and reads platforms.instagram.post_metrics.views.
      * Throws on API failure or missing views data so callers can handle per-post errors.
      */
     async getPostAnalytics(platformPostId: string): Promise<number> {
