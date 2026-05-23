@@ -113,12 +113,12 @@ describe('UploadPostClientService', () => {
     });
 
     describe('getTotalImpressions', () => {
-        test('returns per-platform counts from breakdown response', async () => {
+        test('returns per-platform counts from per_platform response', async () => {
             globalThis.fetch = mock(() => Promise.resolve({
                 ok: true,
                 json: () => Promise.resolve({
                     total_impressions: 5000,
-                    breakdown: { instagram: 2000, youtube: 1500, tiktok: 1000, twitter: 500 },
+                    per_platform: { instagram: 2000, youtube: 1500, tiktok: 1000, twitter: 500 },
                 }),
             })) as typeof fetch;
 
@@ -143,14 +143,16 @@ describe('UploadPostClientService', () => {
             await expect(client.getTotalImpressions('myprofile')).rejects.toThrow('Failed to fetch total impressions: 401');
         });
 
-        test('throws when breakdown is absent in response', async () => {
+        test('returns zeros when per_platform is absent', async () => {
             globalThis.fetch = mock(() => Promise.resolve({
                 ok: true,
-                json: () => Promise.resolve({ total_impressions: 5000 }),
+                json: () => Promise.resolve({ total_impressions: 0 }),
             })) as typeof fetch;
 
             const client = new UploadPostClientService('test-api-key', 'test-user');
-            await expect(client.getTotalImpressions('myprofile')).rejects.toThrow('No breakdown in total-impressions response for user myprofile');
+            const result = await client.getTotalImpressions('myprofile');
+
+            expect(result).toEqual({ instagram: 0, youtube: 0, tiktok: 0, twitter: 0 });
         });
 
         test('defaults missing platforms to 0', async () => {
@@ -158,7 +160,7 @@ describe('UploadPostClientService', () => {
                 ok: true,
                 json: () => Promise.resolve({
                     total_impressions: 2000,
-                    breakdown: { instagram: 2000 },
+                    per_platform: { instagram: 2000 },
                 }),
             })) as typeof fetch;
 
@@ -173,7 +175,7 @@ describe('UploadPostClientService', () => {
                 ok: true,
                 json: () => Promise.resolve({
                     total_impressions: 3000,
-                    breakdown: { instagram: 1500, youtube: 1000, tiktok: 400, twitter: 100 },
+                    per_platform: { instagram: 1500, youtube: 1000, tiktok: 400, twitter: 100 },
                 }),
             })) as typeof fetch;
 
@@ -186,6 +188,22 @@ describe('UploadPostClientService', () => {
             expect(url).toContain('breakdown=true');
             expect(url).toContain('date=2025-05-15');
             expect(url).not.toContain('period=last_day');
+        });
+
+        test('maps per_platform.x to twitter when per_platform.twitter is absent', async () => {
+            globalThis.fetch = mock(() => Promise.resolve({
+                ok: true,
+                json: () => Promise.resolve({
+                    total_impressions: 999,
+                    per_platform: { x: 999 },
+                }),
+            })) as typeof fetch;
+
+            const client = new UploadPostClientService('test-api-key', 'test-user');
+            const result = await client.getTotalImpressions('myprofile');
+
+            expect(result.twitter).toBe(999);
+            expect(result).toEqual({ instagram: 0, youtube: 0, tiktok: 0, twitter: 999 });
         });
     });
 });
