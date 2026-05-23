@@ -185,4 +185,48 @@ export class UploadPostClientService {
         logger.debug('Retrieved post analytics', { platformPostId, views });
         return views;
     }
+
+    /**
+     * Fetches per-platform total impressions for the given Upload-Post username
+     * for the last 24 hours. Platforms absent from the breakdown default to 0.
+     * Throws on API failure or if the breakdown key is missing entirely.
+     *
+     * Note: the Upload-Post API docs do not show a concrete response example;
+     * verify the exact breakdown key names against a live response if values
+     * are unexpectedly 0.
+     */
+    async getTotalImpressions(username: string): Promise<{
+        instagram: number;
+        youtube: number;
+        tiktok: number;
+        twitter: number;
+    }> {
+        const url = `${this.baseUrl}/uploadposts/total-impressions/${encodeURIComponent(username)}?breakdown=true&period=last_day`;
+
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Apikey ${this.apiKey}` },
+        });
+
+        if (!response.ok) {
+            logger.error('Upload-Post total-impressions request failed', {
+                status: response.status,
+                username,
+            });
+            throw new Error(`Failed to fetch total impressions: ${response.status}`);
+        }
+
+        const data = await response.json() as Record<string, unknown>;
+        const breakdown = data.breakdown as Record<string, unknown> | undefined;
+
+        if (!breakdown || typeof breakdown !== 'object') {
+            throw new Error(`No breakdown in total-impressions response for user ${username}`);
+        }
+
+        return {
+            instagram: typeof breakdown.instagram === 'number' ? breakdown.instagram : 0,
+            youtube:   typeof breakdown.youtube   === 'number' ? breakdown.youtube   : 0,
+            tiktok:    typeof breakdown.tiktok    === 'number' ? breakdown.tiktok    : 0,
+            twitter:   typeof breakdown.twitter   === 'number' ? breakdown.twitter   : 0,
+        };
+    }
 }

@@ -111,4 +111,61 @@ describe('UploadPostClientService', () => {
             expect(result.instagramPostId).toBeUndefined();
         });
     });
+
+    describe('getTotalImpressions', () => {
+        test('returns per-platform counts from breakdown response', async () => {
+            globalThis.fetch = mock(() => Promise.resolve({
+                ok: true,
+                json: () => Promise.resolve({
+                    total_impressions: 5000,
+                    breakdown: { instagram: 2000, youtube: 1500, tiktok: 1000, twitter: 500 },
+                }),
+            })) as typeof fetch;
+
+            const client = new UploadPostClientService('test-api-key', 'test-user');
+            const result = await client.getTotalImpressions('myprofile');
+
+            expect(result).toEqual({ instagram: 2000, youtube: 1500, tiktok: 1000, twitter: 500 });
+            const [url, options] = (globalThis.fetch as ReturnType<typeof mock>).mock.calls[0] as [string, RequestInit];
+            expect(url).toContain('/uploadposts/total-impressions/myprofile');
+            expect(url).toContain('breakdown=true');
+            expect(url).toContain('period=last_day');
+            expect((options.headers as Record<string, string>)['Authorization']).toBe('Apikey test-api-key');
+        });
+
+        test('throws when API response is not ok', async () => {
+            globalThis.fetch = mock(() => Promise.resolve({
+                ok: false,
+                status: 401,
+            })) as typeof fetch;
+
+            const client = new UploadPostClientService('test-api-key', 'test-user');
+            await expect(client.getTotalImpressions('myprofile')).rejects.toThrow('Failed to fetch total impressions: 401');
+        });
+
+        test('throws when breakdown is absent in response', async () => {
+            globalThis.fetch = mock(() => Promise.resolve({
+                ok: true,
+                json: () => Promise.resolve({ total_impressions: 5000 }),
+            })) as typeof fetch;
+
+            const client = new UploadPostClientService('test-api-key', 'test-user');
+            await expect(client.getTotalImpressions('myprofile')).rejects.toThrow('No breakdown in total-impressions response for user myprofile');
+        });
+
+        test('defaults missing platforms to 0', async () => {
+            globalThis.fetch = mock(() => Promise.resolve({
+                ok: true,
+                json: () => Promise.resolve({
+                    total_impressions: 2000,
+                    breakdown: { instagram: 2000 },
+                }),
+            })) as typeof fetch;
+
+            const client = new UploadPostClientService('test-api-key', 'test-user');
+            const result = await client.getTotalImpressions('myprofile');
+
+            expect(result).toEqual({ instagram: 2000, youtube: 0, tiktok: 0, twitter: 0 });
+        });
+    });
 });
