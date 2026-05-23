@@ -193,8 +193,14 @@ export class UploadPostClientService {
      * - With `options.date` (YYYY-MM-DD): impressions for that specific past day, used by the
      *   manual backfill endpoint.
      *
-     * Platforms absent from the breakdown default to 0. Throws on API failure or if the
-     * breakdown key is missing entirely.
+     * The Upload-Post API returns per-platform counts under `per_platform` (note: the
+     * `breakdown=true` query param is what asks for it, but the response field is named
+     * `per_platform`). Platforms absent from `per_platform` default to 0. If `per_platform`
+     * itself is missing (e.g. a day with no activity), all platforms default to 0 rather
+     * than throwing — that way legitimate "no data" days still get a zero row recorded.
+     *
+     * Twitter is accepted under either `twitter` or `x` (Upload-Post's docs are inconsistent).
+     * Throws only on API/HTTP failure.
      */
     async getTotalImpressions(
         username: string,
@@ -227,17 +233,18 @@ export class UploadPostClientService {
         }
 
         const data = await response.json() as Record<string, unknown>;
-        const breakdown = data.breakdown as Record<string, unknown> | undefined;
+        const perPlatform = data.per_platform as Record<string, unknown> | undefined;
 
-        if (!breakdown || typeof breakdown !== 'object') {
-            throw new Error(`No breakdown in total-impressions response for user ${username}`);
+        if (!perPlatform || typeof perPlatform !== 'object') {
+            return { instagram: 0, youtube: 0, tiktok: 0, twitter: 0 };
         }
 
+        const twitterRaw = perPlatform.twitter ?? perPlatform.x;
         return {
-            instagram: typeof breakdown.instagram === 'number' ? breakdown.instagram : 0,
-            youtube:   typeof breakdown.youtube   === 'number' ? breakdown.youtube   : 0,
-            tiktok:    typeof breakdown.tiktok    === 'number' ? breakdown.tiktok    : 0,
-            twitter:   typeof breakdown.twitter   === 'number' ? breakdown.twitter   : 0,
+            instagram: typeof perPlatform.instagram === 'number' ? perPlatform.instagram : 0,
+            youtube:   typeof perPlatform.youtube   === 'number' ? perPlatform.youtube   : 0,
+            tiktok:    typeof perPlatform.tiktok    === 'number' ? perPlatform.tiktok    : 0,
+            twitter:   typeof twitterRaw            === 'number' ? twitterRaw            : 0,
         };
     }
 }
