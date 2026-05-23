@@ -7,6 +7,7 @@ import { handleStats } from './routes/stats.js';
 import { handleViewsHistory } from './routes/views-history.js';
 import { handleImpressionsHistory } from './routes/impressions-history.js';
 import { handleSyncImpressions } from './routes/sync-impressions.js';
+import { handleBackfillImpressions } from './routes/backfill-impressions.js';
 import { handleRecentPosts } from './routes/recent-posts.js';
 import { handleBackfillDailyViews } from './routes/backfill-daily-views.js';
 import { handleCaptions, handleCaptionById } from './routes/captions.js';
@@ -281,6 +282,11 @@ startup().then(() => {
       // Manual impressions sync endpoint (requires admin authentication)
       if (url.pathname === '/api/sync-impressions' && request.method === 'POST') {
         return withCors(await handleSyncImpressions(request, impressionsSyncCron), request);
+      }
+
+      // Manual impressions backfill endpoint (requires admin authentication)
+      if (url.pathname === '/api/impressions/backfill' && request.method === 'POST') {
+        return withCors(await handleBackfillImpressions(request, impressionsSyncCron), request);
       }
 
       // Backfill daily views (one-time admin endpoint)
