@@ -167,5 +167,25 @@ describe('UploadPostClientService', () => {
 
             expect(result).toEqual({ instagram: 2000, youtube: 0, tiktok: 0, twitter: 0 });
         });
+
+        test('uses ?date=YYYY-MM-DD when options.date is provided (instead of period=last_day)', async () => {
+            globalThis.fetch = mock(() => Promise.resolve({
+                ok: true,
+                json: () => Promise.resolve({
+                    total_impressions: 3000,
+                    breakdown: { instagram: 1500, youtube: 1000, tiktok: 400, twitter: 100 },
+                }),
+            })) as typeof fetch;
+
+            const client = new UploadPostClientService('test-api-key', 'test-user');
+            const result = await client.getTotalImpressions('myprofile', { date: '2025-05-15' });
+
+            expect(result).toEqual({ instagram: 1500, youtube: 1000, tiktok: 400, twitter: 100 });
+            const [url] = (globalThis.fetch as ReturnType<typeof mock>).mock.calls[0] as [string, RequestInit];
+            expect(url).toContain('/uploadposts/total-impressions/myprofile');
+            expect(url).toContain('breakdown=true');
+            expect(url).toContain('date=2025-05-15');
+            expect(url).not.toContain('period=last_day');
+        });
     });
 });

@@ -135,6 +135,113 @@ describe('ImpressionsSyncCronService', () => {
         expect(r2).toEqual({ updated: 0, failed: 0 });
         expect(mockGetAccounts).toHaveBeenCalledTimes(1);
     });
+
+    test('backfillImpressions iterates each day × account and inserts with the requested date', async () => {
+        mockGetAccounts.mockResolvedValueOnce([
+            { id: 10, ig_access_token: 't1', ig_user_id: 'u1' },
+            { id: 20, ig_access_token: 't2', ig_user_id: 'u2' },
+        ]);
+        mockGetCredentialsByPlatform.mockResolvedValue({
+            id: 1, account_id: 0, platform: 'upload_post' as Platform,
+            credentials: { api_key: 'key', user: 'upuser', instagram: true, youtube: false, tiktok: false, twitter: false },
+            active: true, created_at: new Date(),
+        });
+        mockGetTotalImpressions.mockResolvedValue({ instagram: 100, youtube: 0, tiktok: 0, twitter: 0 });
+
+        const start = new Date(Date.UTC(2025, 4, 1));  // 2025-05-01
+        const end   = new Date(Date.UTC(2025, 4, 3));  // 2025-05-03
+
+        const result = await service.backfillImpressions(start, end);
+
+        expect(result).toEqual({ daysProcessed: 3, accountsPerDay: 2, updated: 6, failed: 0 });
+        expect(mockGetTotalImpressions).toHaveBeenCalledTimes(6);
+        expect(mockInsertDailyImpressions).toHaveBeenCalledTimes(6);
+
+        // First call: 2025-05-01, account 10
+        const firstInsert = mockInsertDailyImpressions.mock.calls[0];
+        expect(firstInsert[0]).toBe(10);
+        expect((firstInsert[1] as Date).toISOString().split('T')[0]).toBe('2025-05-01');
+
+        // Last call: 2025-05-03, account 20
+        const lastInsert = mockInsertDailyImpressions.mock.calls[5];
+        expect(lastInsert[0]).toBe(20);
+        expect((lastInsert[1] as Date).toISOString().split('T')[0]).toBe('2025-05-03');
+    });
+
+    test('backfillImpressions counts a failure when getTotalImpressions throws for one (date, account) pair', async () => {
+        mockGetAccounts.mockResolvedValueOnce([
+            { id: 10, ig_access_token: 't1', ig_user_id: 'u1' },
+            { id: 20, ig_access_token: 't2', ig_user_id: 'u2' },
+        ]);
+        mockGetCredentialsByPlatform.mockResolvedValue({
+            id: 1, account_id: 0, platform: 'upload_post' as Platform,
+            credentials: { api_key: 'key', user: 'upuser', instagram: true, youtube: false, tiktok: false, twitter: false },
+            active: true, created_at: new Date(),
+        });
+        // 2 days × 2 accounts = 4 calls. Make the 2nd call (day 1, account 20) throw.
+        mockGetTotalImpressions
+            .mockResolvedValueOnce({ instagram: 100, youtube: 0, tiktok: 0, twitter: 0 })
+            .mockRejectedValueOnce(new Error('upstream 500'))
+            .mockResolvedValueOnce({ instagram: 200, youtube: 0, tiktok: 0, twitter: 0 })
+            .mockResolvedValueOnce({ instagram: 300, youtube: 0, tiktok: 0, twitter: 0 });
+
+        const start = new Date(Date.UTC(2025, 4, 1));
+        const end   = new Date(Date.UTC(2025, 4, 2));
+
+        const result = await service.backfillImpressions(start, end);
+
+        expect(result).toEqual({ daysProcessed: 2, accountsPerDay: 2, updated: 3, failed: 1 });
+        expect(mockGetTotalImpressions).toHaveBeenCalledTimes(4);
+        expect(mockInsertDailyImpressions).toHaveBeenCalledTimes(3);
+    });
+
+    test('backfillImpressions counts every day as failed for an account with no upload_post credentials', async () => {
+        mockGetAccounts.mockResolvedValueOnce([
+            { id: 10, ig_access_token: 't1', ig_user_id: 'u1' },
+            { id: 20, ig_access_token: 't2', ig_user_id: 'u2' },
+        ]);
+        // Account 10 has no upload_post credentials; account 20 does.
+        mockGetCredentialsByPlatform.mockImplementation(async (accountId: number) => {
+            if (accountId === 10) return null;
+            return {
+                id: 1, account_id: 20, platform: 'upload_post' as Platform,
+                credentials: { api_key: 'key', user: 'upuser', instagram: true, youtube: false, tiktok: false, twitter: false },
+                active: true, created_at: new Date(),
+            };
+        });
+        mockGetTotalImpressions.mockResolvedValue({ instagram: 50, youtube: 0, tiktok: 0, twitter: 0 });
+
+        const start = new Date(Date.UTC(2025, 4, 1));
+        const end   = new Date(Date.UTC(2025, 4, 3));  // 3 days
+
+        const result = await service.backfillImpressions(start, end);
+
+        // 3 days × 1 missing-cred account = 3 failed; 3 days × 1 valid account = 3 updated.
+        expect(result).toEqual({ daysProcessed: 3, accountsPerDay: 2, updated: 3, failed: 3 });
+        expect(mockGetTotalImpressions).toHaveBeenCalledTimes(3);
+        expect(mockInsertDailyImpressions).toHaveBeenCalledTimes(3);
+    });
+
+    test('backfillImpressions returns zeros when a sync is already in progress', async () => {
+        // Simulate a sync mid-flight by holding syncImpressions open.
+        let resolveSync!: () => void;
+        const syncRunning = new Promise<void>((res) => { resolveSync = res; });
+        mockGetAccounts.mockImplementationOnce(() => syncRunning.then(() => []));
+
+        const sync = service.syncImpressions();
+        // At this point isRunning is true (syncImpressions has started but not finished).
+        const start = new Date(Date.UTC(2025, 4, 1));
+        const end   = new Date(Date.UTC(2025, 4, 3));
+        const backfillResult = await service.backfillImpressions(start, end);
+
+        expect(backfillResult).toEqual({ daysProcessed: 0, accountsPerDay: 0, updated: 0, failed: 0 });
+        // Backfill must not call the API or DB while sync is running.
+        expect(mockGetTotalImpressions).not.toHaveBeenCalled();
+        expect(mockInsertDailyImpressions).not.toHaveBeenCalled();
+
+        resolveSync();
+        await sync;
+    });
 });
 
 afterAll(async () => {

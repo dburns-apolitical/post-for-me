@@ -187,21 +187,31 @@ export class UploadPostClientService {
     }
 
     /**
-     * Fetches per-platform total impressions for the given Upload-Post username
-     * for the last 24 hours. Platforms absent from the breakdown default to 0.
-     * Throws on API failure or if the breakdown key is missing entirely.
+     * Fetches per-platform total impressions for the given Upload-Post username.
+     * - With no options (or `options.date` omitted): rolling last 24 hours (`period=last_day`).
+     *   This is what the daily cron uses.
+     * - With `options.date` (YYYY-MM-DD): impressions for that specific past day, used by the
+     *   manual backfill endpoint.
      *
-     * Note: the Upload-Post API docs do not show a concrete response example;
-     * verify the exact breakdown key names against a live response if values
-     * are unexpectedly 0.
+     * Platforms absent from the breakdown default to 0. Throws on API failure or if the
+     * breakdown key is missing entirely.
      */
-    async getTotalImpressions(username: string): Promise<{
+    async getTotalImpressions(
+        username: string,
+        options?: { date?: string }
+    ): Promise<{
         instagram: number;
         youtube: number;
         tiktok: number;
         twitter: number;
     }> {
-        const url = `${this.baseUrl}/uploadposts/total-impressions/${encodeURIComponent(username)}?breakdown=true&period=last_day`;
+        const params = new URLSearchParams({ breakdown: 'true' });
+        if (options?.date) {
+            params.set('date', options.date);
+        } else {
+            params.set('period', 'last_day');
+        }
+        const url = `${this.baseUrl}/uploadposts/total-impressions/${encodeURIComponent(username)}?${params.toString()}`;
 
         const response = await fetch(url, {
             headers: { 'Authorization': `Apikey ${this.apiKey}` },
@@ -211,6 +221,7 @@ export class UploadPostClientService {
             logger.error('Upload-Post total-impressions request failed', {
                 status: response.status,
                 username,
+                date: options?.date,
             });
             throw new Error(`Failed to fetch total impressions: ${response.status}`);
         }

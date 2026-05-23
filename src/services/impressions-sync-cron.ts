@@ -111,4 +111,104 @@ export class ImpressionsSyncCronService {
 
         return { updated, failed };
     }
+
+    /**
+     * Backfills daily_impressions rows for each day in [startDate, endDate] inclusive,
+     * for every account that has upload_post credentials. Called from the manual
+     * backfill admin endpoint; the daily cron uses syncImpressions instead.
+     *
+     * Shares the `isRunning` guard with syncImpressions so the cron and a manual
+     * backfill can't run concurrently.
+     *
+     * Per-(date, account) errors are caught and counted as `failed`; the loop always
+     * completes once it has started.
+     */
+    async backfillImpressions(
+        startDate: Date,
+        endDate: Date,
+    ): Promise<{ daysProcessed: number; accountsPerDay: number; updated: number; failed: number }> {
+        if (this.isRunning) {
+            logger.warn('Impressions sync already in progress, skipping backfill');
+            return { daysProcessed: 0, accountsPerDay: 0, updated: 0, failed: 0 };
+        }
+
+        this.isRunning = true;
+        logger.info('Starting impressions backfill', {
+            startDate: startDate.toISOString().split('T')[0],
+            endDate:   endDate.toISOString().split('T')[0],
+        });
+
+        let updated = 0;
+        let failed = 0;
+        let daysProcessed = 0;
+        let accountsPerDay = 0;
+
+        try {
+            const accounts = await this.db.getAccounts();
+            accountsPerDay = accounts.length;
+
+            if (accounts.length === 0) {
+                logger.info('No accounts to backfill impressions for');
+                return { daysProcessed: 0, accountsPerDay: 0, updated: 0, failed: 0 };
+            }
+
+            // Iterate each UTC day from start to end inclusive.
+            const cursor = new Date(Date.UTC(
+                startDate.getUTCFullYear(),
+                startDate.getUTCMonth(),
+                startDate.getUTCDate(),
+            ));
+            const endUtc = new Date(Date.UTC(
+                endDate.getUTCFullYear(),
+                endDate.getUTCMonth(),
+                endDate.getUTCDate(),
+            ));
+
+            while (cursor.getTime() <= endUtc.getTime()) {
+                const dateStr = cursor.toISOString().split('T')[0];
+
+                for (const account of accounts) {
+                    try {
+                        const credential = await this.db.getCredentialsByPlatform(account.id, 'upload_post');
+                        if (!credential) {
+                            logger.warn('No upload_post credentials for account during backfill, skipping', {
+                                accountId: account.id, date: dateStr,
+                            });
+                            failed++;
+                            continue;
+                        }
+
+                        const creds = credential.credentials as UploadPostCredentials;
+                        const uploadPost = new UploadPostClientService(creds.api_key, creds.user);
+                        const counts = await uploadPost.getTotalImpressions(creds.user, { date: dateStr });
+                        await this.db.insertDailyImpressions(account.id, new Date(cursor.getTime()), counts);
+
+                        logger.info('Backfilled daily impressions', { accountId: account.id, date: dateStr, ...counts });
+                        updated++;
+                    } catch (error) {
+                        logger.error('Failed to backfill impressions for (account, date)', {
+                            accountId: account.id,
+                            date: dateStr,
+                            error: error instanceof Error ? error.message : 'Unknown error',
+                        });
+                        failed++;
+                    }
+                }
+
+                daysProcessed++;
+                cursor.setUTCDate(cursor.getUTCDate() + 1);
+            }
+
+            logger.info('Impressions backfill completed', { daysProcessed, accountsPerDay, updated, failed });
+        } catch (error) {
+            logger.error('Impressions backfill failed before loop completed', {
+                error: error instanceof Error ? error.message : 'Unknown error',
+            });
+            throw error;
+        } finally {
+            this.isRunning = false;
+        }
+
+        return { daysProcessed, accountsPerDay, updated, failed };
+    }
 }
