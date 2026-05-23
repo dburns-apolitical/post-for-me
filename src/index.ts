@@ -5,6 +5,8 @@ import { handlePostStatus } from './routes/post-status.js';
 import { handleTestInstagram } from './routes/test-instagram.js';
 import { handleStats } from './routes/stats.js';
 import { handleViewsHistory } from './routes/views-history.js';
+import { handleImpressionsHistory } from './routes/impressions-history.js';
+import { handleSyncImpressions } from './routes/sync-impressions.js';
 import { handleRecentPosts } from './routes/recent-posts.js';
 import { handleBackfillDailyViews } from './routes/backfill-daily-views.js';
 import { handleCaptions, handleCaptionById } from './routes/captions.js';
@@ -18,12 +20,14 @@ import { handleAccountCredentials, handleCredentialById } from './routes/credent
 import { DatabaseService } from './services/database.js';
 import { ViewsSyncCronService } from './services/views-sync-cron.js';
 import { AgentEvalCronService } from './services/agent-eval-cron.js';
+import { ImpressionsSyncCronService } from './services/impressions-sync-cron.js';
 import * as fs from 'fs';
 import * as path from 'path';
 
 const config = getConfig();
 const db = new DatabaseService();
 const viewsSyncCron = new ViewsSyncCronService();
+const impressionsSyncCron = new ImpressionsSyncCronService();
 const agentEvalCron = new AgentEvalCronService();
 
 /**
@@ -104,6 +108,9 @@ async function startup(): Promise<void> {
   // Start the views sync cron job
   viewsSyncCron.start();
 
+  // Start the impressions sync cron job
+  impressionsSyncCron.start();
+
   // Start the weekly agent evaluation cron job
   agentEvalCron.start();
 
@@ -118,6 +125,9 @@ async function shutdown(signal: string): Promise<void> {
 
   // Stop the views sync cron job
   viewsSyncCron.stop();
+
+  // Stop the impressions sync cron job
+  impressionsSyncCron.stop();
 
   // Stop the agent evaluation cron job
   agentEvalCron.stop();
@@ -226,6 +236,11 @@ startup().then(() => {
         return withCors(await handleViewsHistory(request), request);
       }
 
+      // Impressions history endpoint (requires authentication)
+      if (url.pathname === '/api/stats/impressions-history' && request.method === 'GET') {
+        return withCors(await handleImpressionsHistory(request), request);
+      }
+
       // Recent posts endpoint (requires authentication)
       if (url.pathname === '/api/stats/recent-posts' && request.method === 'GET') {
         return withCors(await handleRecentPosts(request), request);
@@ -261,6 +276,10 @@ startup().then(() => {
       // Manual views sync endpoint (requires admin authentication)
       if (url.pathname === '/api/sync-views' && request.method === 'POST') {
         return withCors(await handleSyncViews(request, viewsSyncCron), request);
+      }
+
+      if (url.pathname === '/api/sync-impressions' && request.method === 'POST') {
+        return withCors(await handleSyncImpressions(request, impressionsSyncCron), request);
       }
 
       // Backfill daily views (one-time admin endpoint)
