@@ -34,12 +34,15 @@ import { ImpressionsSyncCronService } from '../../src/services/impressions-sync-
 
 describe('ImpressionsSyncCronService', () => {
     let service: ImpressionsSyncCronService;
+    const originalThrottleMs = ImpressionsSyncCronService.BACKFILL_THROTTLE_MS;
 
     beforeEach(() => {
         mockGetAccounts.mockClear();
         mockGetCredentialsByPlatform.mockClear();
         mockInsertDailyImpressions.mockClear();
         mockGetTotalImpressions.mockClear();
+        // Zero out the backfill throttle so tests don't sleep between calls.
+        ImpressionsSyncCronService.BACKFILL_THROTTLE_MS = 0;
         service = new ImpressionsSyncCronService();
     });
 
@@ -241,6 +244,37 @@ describe('ImpressionsSyncCronService', () => {
 
         resolveSync();
         await sync;
+    });
+
+    test('backfillImpressions throttles between (date, account) calls', async () => {
+        ImpressionsSyncCronService.BACKFILL_THROTTLE_MS = 25;
+
+        mockGetAccounts.mockResolvedValueOnce([
+            { id: 10, ig_access_token: 't1', ig_user_id: 'u1' },
+            { id: 20, ig_access_token: 't2', ig_user_id: 'u2' },
+        ]);
+        mockGetCredentialsByPlatform.mockResolvedValue({
+            id: 1, account_id: 0, platform: 'upload_post' as Platform,
+            credentials: { api_key: 'key', user: 'upuser', instagram: true, youtube: false, tiktok: false, twitter: false },
+            active: true, created_at: new Date(),
+        });
+        mockGetTotalImpressions.mockResolvedValue({ instagram: 0, youtube: 0, tiktok: 0, twitter: 0 });
+
+        const start = new Date(Date.UTC(2025, 4, 1));
+        const end   = new Date(Date.UTC(2025, 4, 2)); // 2 days × 2 accounts = 4 calls, 3 throttle waits
+
+        const t0 = Date.now();
+        const result = await service.backfillImpressions(start, end);
+        const elapsed = Date.now() - t0;
+
+        expect(result).toEqual({ daysProcessed: 2, accountsPerDay: 2, updated: 4, failed: 0 });
+        // 3 throttle waits × 25ms = 75ms minimum; allow generous upper bound.
+        expect(elapsed).toBeGreaterThanOrEqual(70);
+        expect(elapsed).toBeLessThan(500);
+    });
+
+    afterAll(() => {
+        ImpressionsSyncCronService.BACKFILL_THROTTLE_MS = originalThrottleMs;
     });
 });
 

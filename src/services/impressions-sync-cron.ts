@@ -10,6 +10,15 @@ export class ImpressionsSyncCronService {
 
     private static readonly INTERVAL_MS = 24 * 60 * 60 * 1000;
 
+    /**
+     * Delay between (date, account) calls inside backfillImpressions to avoid
+     * Upload-Post 429s (sequential bursts of ~50+ requests trip rate limits).
+     * Not used by the daily syncImpressions cron, which only fires a handful of
+     * requests once per day. Exposed as a static field (not readonly) so tests
+     * can override it to keep runs fast.
+     */
+    static BACKFILL_THROTTLE_MS = 1500;
+
     constructor() {
         this.db = new DatabaseService();
     }
@@ -164,8 +173,11 @@ export class ImpressionsSyncCronService {
                 endDate.getUTCDate(),
             ));
 
+            const lastAccount = accounts[accounts.length - 1];
+
             while (cursor.getTime() <= endUtc.getTime()) {
                 const dateStr = cursor.toISOString().split('T')[0];
+                const isLastDay = cursor.getTime() + 24 * 60 * 60 * 1000 > endUtc.getTime();
 
                 for (const account of accounts) {
                     try {
@@ -192,6 +204,14 @@ export class ImpressionsSyncCronService {
                             error: error instanceof Error ? error.message : 'Unknown error',
                         });
                         failed++;
+                    }
+
+                    // Throttle to avoid Upload-Post 429s. Skip the wait after the very
+                    // last (date, account) pair — no point delaying after the loop ends.
+                    if (!(isLastDay && account === lastAccount)) {
+                        await new Promise((resolve) =>
+                            setTimeout(resolve, ImpressionsSyncCronService.BACKFILL_THROTTLE_MS)
+                        );
                     }
                 }
 
