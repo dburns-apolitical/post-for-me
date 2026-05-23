@@ -12,6 +12,7 @@ import { handleBackfillDailyViews } from './routes/backfill-daily-views.js';
 import { handleCaptions, handleCaptionById } from './routes/captions.js';
 import { handleHooks, handleHookById } from './routes/hooks.js';
 import { handleVideos } from './routes/videos.js';
+import { handleMedia } from './routes/media.js';
 import { handleSyncViews } from './routes/sync-views.js';
 import { handleRunEvaluation } from './routes/run-evaluation.js';
 import { handleEvaluations } from './routes/evaluations.js';
@@ -271,6 +272,11 @@ startup().then(() => {
       // List videos endpoint (requires authentication)
       if (url.pathname === '/api/videos' && request.method === 'GET') {
         return withCors(await handleVideos(request), request);
+      }
+
+      // List media (bucket + posted status) endpoint (requires admin authentication)
+      if (url.pathname === '/api/media' && request.method === 'GET') {
+        return withCors(await handleMedia(request), request);
       }
 
       // Manual views sync endpoint (requires admin authentication)
