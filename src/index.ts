@@ -278,6 +278,7 @@ startup().then(() => {
         return withCors(await handleSyncViews(request, viewsSyncCron), request);
       }
 
+      // Manual impressions sync endpoint (requires admin authentication)
       if (url.pathname === '/api/sync-impressions' && request.method === 'POST') {
         return withCors(await handleSyncImpressions(request, impressionsSyncCron), request);
       }
