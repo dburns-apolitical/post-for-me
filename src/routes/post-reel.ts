@@ -1,16 +1,17 @@
 import { logger } from '../utils/logger.js';
 import { validatePostReelRequest } from '../utils/validation.js';
 import { validateAuth, unauthorizedResponse, forbiddenResponse } from '../utils/auth.js';
-import type { PostReelResponse, DbAccount, InstagramDirectCredentials, UploadPostCredentials } from '../types/index.js';
+import type { PostReelResponse, DbAccount, UploadPostCredentials } from '../types/index.js';
 import { VideoSelectorService } from '../services/video-selector.js';
 import { VideoEditorService } from '../services/video-editor.js';
-import { InstagramClientService } from '../services/instagram-client.js';
 import { UploadPostClientService } from '../services/upload-post-client.js';
 import { DatabaseService } from '../services/database.js';
 
 /**
- * Background processing function that handles video editing and Instagram posting.
- * This runs asynchronously after the HTTP response has been sent.
+ * Background processing function that handles video editing and Upload-Post submission.
+ * This runs asynchronously after the HTTP response has been sent. The actual status of the
+ * Upload-Post job is tracked by UploadPostStatusCronService — this function exits as soon
+ * as the submission is accepted (or fails immediately).
  */
 async function processPostInBackground(
     postId: number,
@@ -33,13 +34,11 @@ async function processPostInBackground(
         // Step 3: Validate video format
         logger.info('Step 3: Validating video format', { postId });
         const validation_result = await videoEditor.validateVideoFormat(inputVideoPath);
-
         if (!validation_result.isValid) {
             logger.warn('Video format validation failed', { postId, ...validation_result });
-            // Continue anyway, but log the warning
         }
 
-        // Step 4: Add text overlay to video
+        // Step 4: Add text overlay
         logger.info('Step 4: Adding text overlay to video', { postId });
         editedVideoPath = await videoEditor.addTextOverlay(inputVideoPath, hookText, {
             position: 'top',
@@ -48,145 +47,61 @@ async function processPostInBackground(
             strokeColor: 'black',
             strokeWidth: 3,
         });
-
         logger.info('Video edited successfully', { postId, editedPath: editedVideoPath });
 
         // Step 5: Upload edited video to GCS
         logger.info('Step 5: Uploading edited video to GCS', { postId });
         editedVideoUrl = await videoSelector.uploadEditedVideo(editedVideoPath);
-
         logger.info('Edited video uploaded', { postId, videoUrl: editedVideoUrl });
 
-        // Step 6: Post to platforms
-        logger.info('Step 6: Posting Reel to platforms', { postId });
+        // Step 6: Submit to Upload-Post (async). Persist the request_id BEFORE the network call
+        // so a crash mid-submission still leaves a row the cron can pick up. The X-Request-Id
+        // header makes the submission idempotent if the request is retried.
+        logger.info('Step 6: Submitting Reel to Upload-Post', { postId });
 
-        // Look up credentials for both platforms
-        const igCredential = await db.getCredentialsByPlatform(account.id, 'instagram_direct');
         const upCredential = await db.getCredentialsByPlatform(account.id, 'upload_post');
-
-        if (!igCredential && !upCredential) {
-            throw new Error(`No credentials found for account ${account.id} (need instagram_direct or upload_post)`);
+        if (!upCredential) {
+            throw new Error(`No upload_post credentials for account ${account.id}`);
+        }
+        const upCreds = upCredential.credentials as UploadPostCredentials;
+        const platforms: string[] = [];
+        if (upCreds.youtube) platforms.push('youtube');
+        if (upCreds.tiktok) platforms.push('tiktok');
+        if (upCreds.twitter) platforms.push('x');
+        if (upCreds.instagram) platforms.push('instagram');
+        if (platforms.length === 0) {
+            throw new Error(`Account ${account.id} has upload_post credentials but no platforms enabled`);
         }
 
-        // Build concurrent posting promises
-        const postingPromises: Promise<void>[] = [];
-        let instagramPostId: string | null = null;
-        let primaryError: Error | null = null;
+        const requestId = crypto.randomUUID();
+        await db.markUploadPostSubmitting(postId, requestId, editedVideoUrl, userId, userName);
 
-        // Instagram direct posting (if credentials exist)
-        if (igCredential) {
-            const igCreds = igCredential.credentials as InstagramDirectCredentials;
-            const igPromise = (async () => {
-                const instagramClient = new InstagramClientService(igCreds.ig_access_token, igCreds.ig_user_id);
+        const uploadPostClient = new UploadPostClientService(upCreds.api_key, upCreds.user);
+        await uploadPostClient.postVideoAsync({
+            requestId,
+            videoUrl: editedVideoUrl,
+            caption,
+            hashtags,
+            platforms,
+            shareToFeed,
+        });
 
-                logger.info('Posting Reel to Instagram (direct)', { postId });
-                const instagramPost = await instagramClient.postReel(
-                    editedVideoUrl!,
-                    caption,
-                    hashtags,
-                    shareToFeed
-                );
+        logger.info('Upload-Post submission accepted; cron will track to completion', {
+            postId,
+            requestId,
+            platforms,
+        });
 
-                instagramPostId = instagramPost.id;
-                logger.info('Reel posted to Instagram successfully', {
-                    postId,
-                    instagramPostId: instagramPost.id,
-                    status: instagramPost.status,
-                });
-            })();
-            postingPromises.push(igPromise.catch((err) => { primaryError = err; }));
-        }
-
-        // Upload-Post posting (if credentials exist)
-        if (upCredential) {
-            const upCreds = upCredential.credentials as UploadPostCredentials;
-            const uploadPostPlatforms: string[] = [];
-            if (upCreds.youtube) uploadPostPlatforms.push('youtube');
-            if (upCreds.tiktok) uploadPostPlatforms.push('tiktok');
-            if (upCreds.twitter) uploadPostPlatforms.push('x');
-            if (upCreds.instagram && !igCredential) uploadPostPlatforms.push('instagram');
-
-            if (uploadPostPlatforms.length === 0) {
-                logger.warn('Upload-Post credentials exist but no platforms enabled, skipping', { postId });
-            }
-
-            const upPromise = uploadPostPlatforms.length === 0 ? Promise.resolve() : (async () => {
-                const uploadPostClient = new UploadPostClientService(upCreds.api_key, upCreds.user);
-
-                logger.info('Posting video to Upload-Post', { postId, platforms: uploadPostPlatforms });
-                const result = await uploadPostClient.postVideo(
-                    editedVideoUrl!,
-                    caption,
-                    hashtags,
-                    uploadPostPlatforms
-                );
-
-                if (result.instagramPostId && !instagramPostId) {
-                    instagramPostId = result.instagramPostId;
-                }
-
-                if (!result.success && !igCredential) {
-                    throw new Error('Upload-Post posting failed and no instagram_direct fallback');
-                }
-
-                if (!result.success) {
-                    logger.warn('Upload-Post posting failed (non-critical, instagram_direct is primary)', { postId });
-                }
-            })();
-            postingPromises.push(upPromise.catch((err) => {
-                if (!igCredential) {
-                    primaryError = err;
-                } else {
-                    logger.warn('Upload-Post error (non-critical)', {
-                        postId,
-                        error: err instanceof Error ? err.message : 'Unknown error',
-                    });
-                }
-            }));
-        }
-
-        // Wait for all posting operations to complete
-        await Promise.all(postingPromises);
-
-        // Check for errors from the primary platform
-        if (primaryError) {
-            throw primaryError;
-        }
-
-        // Update post status to success
-        logger.info('Updating post status to success', { postId });
-        await db.markPostSuccess(postId, instagramPostId);
-
-        // Step 7b: Create user_posts entry if user info available
-        if (userId && userName) {
-            try {
-                logger.info('Creating user_posts entry', { postId, userId, userName });
-                await db.createUserPost(postId, userId, userName);
-            } catch (userPostError) {
-                logger.warn('Failed to create user_posts entry', {
-                    postId,
-                    userId,
-                    userName,
-                    error: userPostError instanceof Error ? userPostError.message : 'Unknown error',
-                });
-            }
-        }
-
-        // Step 8: Cleanup temporary files and GCS edited video
-        logger.info('Step 8: Cleaning up temporary files', { postId });
+        // Cleanup local files. The GCS edited video stays until the cron sees a terminal status.
         videoSelector.cleanupTempFile(inputVideoPath);
         videoEditor.cleanupTempFile(editedVideoPath);
-        await videoSelector.deleteEditedVideo(editedVideoUrl);
-
-        logger.info('Post processing completed successfully', { postId });
     } catch (error) {
-        logger.error('Error in background post processing', {
+        logger.error('Error in background post submission', {
             postId,
             error: error instanceof Error ? error.message : 'Unknown error',
             stack: error instanceof Error ? error.stack : undefined,
         });
 
-        // Update post status to failed
         try {
             await db.updatePostStatus(postId, 'failed');
             logger.info('Post status updated to failed', { postId });
@@ -197,22 +112,10 @@ async function processPostInBackground(
             });
         }
 
-        // Cleanup temporary files on error
-        try {
-            videoSelector.cleanupTempFile(inputVideoPath);
-        } catch (cleanupError) {
-            logger.warn('Failed to cleanup input video on error', { postId, inputVideoPath });
-        }
-
+        try { videoSelector.cleanupTempFile(inputVideoPath); } catch { /* ignore */ }
         if (editedVideoPath) {
-            try {
-                videoEditor.cleanupTempFile(editedVideoPath);
-            } catch (cleanupError) {
-                logger.warn('Failed to cleanup edited video on error', { postId, editedVideoPath });
-            }
+            try { videoEditor.cleanupTempFile(editedVideoPath); } catch { /* ignore */ }
         }
-
-        // Cleanup GCS edited video on error (if it was uploaded)
         if (editedVideoUrl) {
             await videoSelector.deleteEditedVideo(editedVideoUrl);
         }

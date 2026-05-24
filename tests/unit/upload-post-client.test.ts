@@ -56,62 +56,6 @@ describe('UploadPostClientService', () => {
         });
     });
 
-    describe('postVideo instagramPostId extraction', () => {
-        test('returns instagramPostId from sync response results.instagram.post_id', async () => {
-            globalThis.fetch = mock(() => Promise.resolve({
-                ok: true,
-                json: () => Promise.resolve({
-                    request_id: 'req-123',
-                    results: {
-                        instagram: { post_id: 'ig-456', success: true },
-                    },
-                }),
-            })) as typeof fetch;
-
-            const client = new UploadPostClientService('test-api-key', 'test-user');
-            const result = await client.postVideo('https://video.url', 'caption', [], ['instagram']);
-
-            expect(result.success).toBe(true);
-            expect(result.instagramPostId).toBe('ig-456');
-        });
-
-        test('falls back to publish_id when post_id is absent', async () => {
-            globalThis.fetch = mock(() => Promise.resolve({
-                ok: true,
-                json: () => Promise.resolve({
-                    request_id: 'req-123',
-                    results: {
-                        instagram: { publish_id: 'pub-789', success: true },
-                    },
-                }),
-            })) as typeof fetch;
-
-            const client = new UploadPostClientService('test-api-key', 'test-user');
-            const result = await client.postVideo('https://video.url', 'caption', [], ['instagram']);
-
-            expect(result.success).toBe(true);
-            expect(result.instagramPostId).toBe('pub-789');
-        });
-
-        test('returns undefined instagramPostId when Instagram is not in results', async () => {
-            globalThis.fetch = mock(() => Promise.resolve({
-                ok: true,
-                json: () => Promise.resolve({
-                    request_id: 'req-123',
-                    results: {
-                        youtube: { video_id: 'yt-123', success: true },
-                    },
-                }),
-            })) as typeof fetch;
-
-            const client = new UploadPostClientService('test-api-key', 'test-user');
-            const result = await client.postVideo('https://video.url', 'caption', [], ['youtube']);
-
-            expect(result.success).toBe(true);
-            expect(result.instagramPostId).toBeUndefined();
-        });
-    });
-
     describe('getTotalImpressions', () => {
         test('returns per-platform counts from per_platform response', async () => {
             globalThis.fetch = mock(() => Promise.resolve({
@@ -204,6 +148,192 @@ describe('UploadPostClientService', () => {
 
             expect(result.twitter).toBe(999);
             expect(result).toEqual({ instagram: 0, youtube: 0, tiktok: 0, twitter: 999 });
+        });
+    });
+
+    describe('postVideoAsync', () => {
+        test('submits with async_upload=true and X-Request-Id header, resolves on 2xx', async () => {
+            const fetchMock = mock(() => Promise.resolve({
+                ok: true,
+                status: 200,
+                json: () => Promise.resolve({ request_id: 'req-async' }),
+            })) as ReturnType<typeof mock>;
+            globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+            const client = new UploadPostClientService('test-api-key', 'test-user');
+            await client.postVideoAsync({
+                requestId: 'req-async',
+                videoUrl: 'https://video.url/x.mp4',
+                caption: 'cap',
+                hashtags: ['a', 'b'],
+                platforms: ['tiktok', 'instagram'],
+            });
+
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+            const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+            expect(url).toBe('https://api.upload-post.com/api/upload');
+            expect(options.method).toBe('POST');
+            const headers = options.headers as Record<string, string>;
+            expect(headers['Authorization']).toBe('Apikey test-api-key');
+            expect(headers['X-Request-Id']).toBe('req-async');
+            const body = options.body as FormData;
+            expect(body.get('user')).toBe('test-user');
+            expect(body.get('video')).toBe('https://video.url/x.mp4');
+            expect(body.get('async_upload')).toBe('true');
+            expect(body.get('title')).toBe('cap\n\n#a #b');
+            expect(body.getAll('platform[]')).toEqual(['tiktok', 'instagram']);
+        });
+
+        test('throws on non-2xx', async () => {
+            globalThis.fetch = mock(() => Promise.resolve({
+                ok: false,
+                status: 500,
+                json: () => Promise.resolve({ error: 'kaboom' }),
+            })) as typeof fetch;
+
+            const client = new UploadPostClientService('test-api-key', 'test-user');
+            await expect(client.postVideoAsync({
+                requestId: 'req-x',
+                videoUrl: 'https://video.url/x.mp4',
+                caption: 'cap',
+                hashtags: [],
+                platforms: ['tiktok'],
+            })).rejects.toThrow(/Upload-Post submission failed: 500/);
+        });
+    });
+
+    describe('getUploadStatus', () => {
+        test('returns in-progress for each documented in-progress status (regression for the original bug)', async () => {
+            const inProgressStatuses = ['pending', 'queued', 'processing', 'in_progress'] as const;
+            for (const status of inProgressStatuses) {
+                globalThis.fetch = mock(() => Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: () => Promise.resolve({ request_id: 'r', status }),
+                })) as typeof fetch;
+
+                const client = new UploadPostClientService('test-api-key', 'test-user');
+                const result = await client.getUploadStatus('r');
+
+                expect(result.status).toBe(status);
+            }
+        });
+
+        test('returns completed with extracted instagramPostId from results.instagram.post_id', async () => {
+            globalThis.fetch = mock(() => Promise.resolve({
+                ok: true,
+                status: 200,
+                json: () => Promise.resolve({
+                    request_id: 'r',
+                    status: 'completed',
+                    results: { instagram: { post_id: 'ig-123', success: true } },
+                }),
+            })) as typeof fetch;
+
+            const client = new UploadPostClientService('test-api-key', 'test-user');
+            const result = await client.getUploadStatus('r');
+
+            expect(result.status).toBe('completed');
+            if (result.status === 'completed') {
+                expect(result.instagramPostId).toBe('ig-123');
+            }
+        });
+
+        test('falls back to publish_id when post_id is absent in completed response', async () => {
+            globalThis.fetch = mock(() => Promise.resolve({
+                ok: true,
+                status: 200,
+                json: () => Promise.resolve({
+                    request_id: 'r',
+                    status: 'completed',
+                    results: { instagram: { publish_id: 'pub-999' } },
+                }),
+            })) as typeof fetch;
+
+            const client = new UploadPostClientService('test-api-key', 'test-user');
+            const result = await client.getUploadStatus('r');
+
+            expect(result.status).toBe('completed');
+            if (result.status === 'completed') {
+                expect(result.instagramPostId).toBe('pub-999');
+            }
+        });
+
+        test('returns completed with instagramPostId=null when instagram is absent', async () => {
+            globalThis.fetch = mock(() => Promise.resolve({
+                ok: true,
+                status: 200,
+                json: () => Promise.resolve({
+                    request_id: 'r',
+                    status: 'completed',
+                    results: { tiktok: { success: true } },
+                }),
+            })) as typeof fetch;
+
+            const client = new UploadPostClientService('test-api-key', 'test-user');
+            const result = await client.getUploadStatus('r');
+
+            expect(result.status).toBe('completed');
+            if (result.status === 'completed') {
+                expect(result.instagramPostId).toBeNull();
+            }
+        });
+
+        test('returns failed with results payload', async () => {
+            globalThis.fetch = mock(() => Promise.resolve({
+                ok: true,
+                status: 200,
+                json: () => Promise.resolve({
+                    request_id: 'r',
+                    status: 'failed',
+                    results: [{ platform: 'tiktok', status: 'failed', error: 'nope' }],
+                }),
+            })) as typeof fetch;
+
+            const client = new UploadPostClientService('test-api-key', 'test-user');
+            const result = await client.getUploadStatus('r');
+
+            expect(result.status).toBe('failed');
+        });
+
+        test('returns not_found on HTTP 404', async () => {
+            globalThis.fetch = mock(() => Promise.resolve({
+                ok: false,
+                status: 404,
+                json: () => Promise.resolve({ error: 'not found' }),
+            })) as typeof fetch;
+
+            const client = new UploadPostClientService('test-api-key', 'test-user');
+            const result = await client.getUploadStatus('r');
+
+            expect(result.status).toBe('not_found');
+        });
+
+        test('returns unknown for unrecognized status string (does NOT treat as terminal)', async () => {
+            globalThis.fetch = mock(() => Promise.resolve({
+                ok: true,
+                status: 200,
+                json: () => Promise.resolve({ request_id: 'r', status: 'something-new' }),
+            })) as typeof fetch;
+
+            const client = new UploadPostClientService('test-api-key', 'test-user');
+            const result = await client.getUploadStatus('r');
+
+            expect(result.status).toBe('unknown');
+            if (result.status === 'unknown') {
+                expect(result.raw).toBe('something-new');
+            }
+        });
+
+        test('throws on HTTP 5xx', async () => {
+            globalThis.fetch = mock(() => Promise.resolve({
+                ok: false,
+                status: 500,
+                json: () => Promise.resolve({ error: 'kaboom' }),
+            })) as typeof fetch;
+
+            const client = new UploadPostClientService('test-api-key', 'test-user');
+            await expect(client.getUploadStatus('r')).rejects.toThrow(/Upload-Post status fetch failed: 500/);
         });
     });
 });

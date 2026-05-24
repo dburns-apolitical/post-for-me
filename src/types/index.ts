@@ -170,6 +170,15 @@ export interface DbPost {
     updated_at: Date;
 }
 
+export interface PendingUploadPostPost {
+    id: number;
+    upload_post_request_id: string;
+    upload_post_submitted_at: Date;
+    edited_video_url: string | null;
+    pending_user_id: string | null;
+    pending_user_name: string | null;
+}
+
 // Dashboard Stats Types
 export interface PostWithDetails {
     id: number;

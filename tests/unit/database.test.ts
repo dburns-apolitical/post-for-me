@@ -157,6 +157,77 @@ describe('DatabaseService', () => {
 
             await expect(db.markPostSuccess(1, 'ig_12345')).resolves.toBeUndefined();
         });
+
+        test('clears in-flight tracking columns on success transition', async () => {
+            mockSql.mockResolvedValueOnce([]);
+            await db.markPostSuccess(99, 'ig_abc');
+            expect(mockSql).toHaveBeenCalledTimes(1);
+            const args = mockSql.mock.calls[0] as unknown as [TemplateStringsArray, ...unknown[]];
+            const sqlText = args[0].join('?');
+            expect(sqlText).toContain('edited_video_url = NULL');
+            expect(sqlText).toContain('pending_user_id = NULL');
+            expect(sqlText).toContain('pending_user_name = NULL');
+        });
+    });
+
+    describe('markUploadPostSubmitting', () => {
+        test('persists request_id, submitted_at (NOW()), edited_video_url, and optional pending user info', async () => {
+            mockSql.mockResolvedValueOnce([]);
+
+            await db.markUploadPostSubmitting(
+                42,
+                'req-abc',
+                'https://storage.googleapis.com/bucket/edited/x.mp4',
+                'user-uuid',
+                'Alice',
+            );
+
+            expect(mockSql).toHaveBeenCalledTimes(1);
+            const args = mockSql.mock.calls[0] as unknown as [TemplateStringsArray, ...unknown[]];
+            expect(args.slice(1)).toEqual(['req-abc', 'https://storage.googleapis.com/bucket/edited/x.mp4', 'user-uuid', 'Alice', 42]);
+        });
+
+        test('accepts optional pending user info as undefined', async () => {
+            mockSql.mockResolvedValueOnce([]);
+
+            await db.markUploadPostSubmitting(
+                7,
+                'req-xyz',
+                'https://storage.googleapis.com/bucket/edited/y.mp4',
+            );
+
+            const args = mockSql.mock.calls[0] as unknown as [TemplateStringsArray, ...unknown[]];
+            expect(args.slice(1)).toEqual(['req-xyz', 'https://storage.googleapis.com/bucket/edited/y.mp4', null, null, 7]);
+        });
+    });
+
+    describe('getPendingUploadPostPosts', () => {
+        test('returns rows with the columns the cron needs', async () => {
+            const rows = [
+                {
+                    id: 100,
+                    upload_post_request_id: 'req-100',
+                    upload_post_submitted_at: new Date('2026-05-23T10:00:00Z'),
+                    edited_video_url: 'https://storage.googleapis.com/b/edited/a.mp4',
+                    pending_user_id: null,
+                    pending_user_name: null,
+                },
+                {
+                    id: 101,
+                    upload_post_request_id: 'req-101',
+                    upload_post_submitted_at: new Date('2026-05-23T10:05:00Z'),
+                    edited_video_url: 'https://storage.googleapis.com/b/edited/b.mp4',
+                    pending_user_id: 'user-2',
+                    pending_user_name: 'Bob',
+                },
+            ];
+            mockSql.mockResolvedValueOnce(rows);
+
+            const result = await db.getPendingUploadPostPosts();
+
+            expect(result).toEqual(rows);
+            expect(mockSql).toHaveBeenCalledTimes(1);
+        });
     });
 
     describe('updatePostStatus', () => {
@@ -165,23 +236,49 @@ describe('DatabaseService', () => {
 
             await expect(db.updatePostStatus(1, 'success')).resolves.toBeUndefined();
         });
+
+        test('clears in-flight tracking columns when transitioning to failed', async () => {
+            mockSql.mockResolvedValueOnce([]);
+            await db.updatePostStatus(50, 'failed');
+            const args = mockSql.mock.calls[0] as unknown as [TemplateStringsArray, ...unknown[]];
+            const sqlText = args[0].join('?');
+            expect(sqlText).toContain('edited_video_url = NULL');
+            expect(sqlText).toContain('pending_user_id = NULL');
+        });
+
+        test('does NOT clear in-flight columns for non-failed transitions', async () => {
+            mockSql.mockResolvedValueOnce([]);
+            await db.updatePostStatus(50, 'pending');
+            const args = mockSql.mock.calls[0] as unknown as [TemplateStringsArray, ...unknown[]];
+            const sqlText = args[0].join('?');
+            expect(sqlText).not.toContain('edited_video_url');
+            expect(sqlText).not.toContain('pending_user_id');
+        });
     });
 
     describe('markPendingPostsAsFailed', () => {
-        test('should return count of marked posts', async () => {
+        test('returns count of stale rows that were marked failed', async () => {
             mockSql.mockResolvedValueOnce([{ id: 1 }, { id: 2 }]);
-
             const result = await db.markPendingPostsAsFailed();
-
             expect(result).toBe(2);
         });
 
-        test('should return 0 when no pending posts', async () => {
+        test('returns 0 when there are no stale rows', async () => {
             mockSql.mockResolvedValueOnce([]);
-
             const result = await db.markPendingPostsAsFailed();
-
             expect(result).toBe(0);
+        });
+
+        test('skips in-flight rows (status=pending, request_id set, submitted < 1h ago)', async () => {
+            mockSql.mockResolvedValueOnce([]);
+            await db.markPendingPostsAsFailed();
+            expect(mockSql).toHaveBeenCalledTimes(1);
+            const args = mockSql.mock.calls[0] as unknown as [TemplateStringsArray, ...unknown[]];
+            const sqlText = args[0].join('?');
+            expect(sqlText).toContain("status = 'failed'");
+            expect(sqlText).toContain("status = 'pending'");
+            expect(sqlText).toContain('upload_post_request_id IS NULL');
+            expect(sqlText).toContain("upload_post_submitted_at < NOW() - INTERVAL '1 hour'");
         });
     });
 

@@ -2,7 +2,6 @@ import { getConfig } from './config/index.js';
 import { logger } from './utils/logger.js';
 import { handlePostReel } from './routes/post-reel.js';
 import { handlePostStatus } from './routes/post-status.js';
-import { handleTestInstagram } from './routes/test-instagram.js';
 import { handleStats } from './routes/stats.js';
 import { handleViewsHistory } from './routes/views-history.js';
 import { handleImpressionsHistory } from './routes/impressions-history.js';
@@ -22,6 +21,7 @@ import { DatabaseService } from './services/database.js';
 import { ViewsSyncCronService } from './services/views-sync-cron.js';
 import { AgentEvalCronService } from './services/agent-eval-cron.js';
 import { ImpressionsSyncCronService } from './services/impressions-sync-cron.js';
+import { UploadPostStatusCronService } from './services/upload-post-status-cron.js';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -29,6 +29,7 @@ const config = getConfig();
 const db = new DatabaseService();
 const viewsSyncCron = new ViewsSyncCronService();
 const impressionsSyncCron = new ImpressionsSyncCronService();
+const uploadPostStatusCron = new UploadPostStatusCronService();
 const agentEvalCron = new AgentEvalCronService();
 
 /**
@@ -112,6 +113,9 @@ async function startup(): Promise<void> {
   // Start the impressions sync cron job
   impressionsSyncCron.start();
 
+  // Start the Upload-Post status polling cron job
+  uploadPostStatusCron.start();
+
   // Start the weekly agent evaluation cron job
   agentEvalCron.start();
 
@@ -129,6 +133,9 @@ async function shutdown(signal: string): Promise<void> {
 
   // Stop the impressions sync cron job
   impressionsSyncCron.stop();
+
+  // Stop the Upload-Post status polling cron job
+  uploadPostStatusCron.stop();
 
   // Stop the agent evaluation cron job
   agentEvalCron.stop();
@@ -220,11 +227,6 @@ startup().then(() => {
       // Post status endpoint
       if (url.pathname === '/api/post-status' && request.method === 'GET') {
         return withCors(await handlePostStatus(request), request);
-      }
-
-      // Test Instagram credentials endpoint
-      if (url.pathname === '/api/test-instagram' && request.method === 'GET') {
-        return withCors(await handleTestInstagram(request), request);
       }
 
       // Dashboard stats endpoint (requires authentication)
