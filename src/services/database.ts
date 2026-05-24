@@ -12,6 +12,7 @@ import type {
     DbHashtagCombination,
     DbVideo,
     DbPost,
+    PendingUploadPostPost,
     PostWithDetails,
     AgentEvaluation,
     ContentAccount,
@@ -252,6 +253,71 @@ export class DatabaseService {
             END $$
         `;
 
+        // Add upload_post_request_id column to posts if it doesn't exist
+        await this.sql`
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'posts' AND column_name = 'upload_post_request_id'
+                ) THEN
+                    ALTER TABLE posts ADD COLUMN upload_post_request_id TEXT;
+                END IF;
+            END $$
+        `;
+
+        // Add upload_post_submitted_at column to posts if it doesn't exist
+        await this.sql`
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'posts' AND column_name = 'upload_post_submitted_at'
+                ) THEN
+                    ALTER TABLE posts ADD COLUMN upload_post_submitted_at TIMESTAMP;
+                END IF;
+            END $$
+        `;
+
+        // Add edited_video_url column to posts if it doesn't exist
+        await this.sql`
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'posts' AND column_name = 'edited_video_url'
+                ) THEN
+                    ALTER TABLE posts ADD COLUMN edited_video_url TEXT;
+                END IF;
+            END $$
+        `;
+
+        // Add pending_user_id column to posts if it doesn't exist
+        await this.sql`
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'posts' AND column_name = 'pending_user_id'
+                ) THEN
+                    ALTER TABLE posts ADD COLUMN pending_user_id UUID;
+                END IF;
+            END $$
+        `;
+
+        // Add pending_user_name column to posts if it doesn't exist
+        await this.sql`
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'posts' AND column_name = 'pending_user_name'
+                ) THEN
+                    ALTER TABLE posts ADD COLUMN pending_user_name TEXT;
+                END IF;
+            END $$
+        `;
+
         // Add enabled column to hooks if it doesn't exist
         await this.sql`
             DO $$
@@ -281,6 +347,14 @@ export class DatabaseService {
         // Create index for faster lookups
         await this.sql`
             CREATE INDEX IF NOT EXISTS idx_posts_status ON posts(status)
+        `;
+
+        // Partial index — only covers in-flight rows the status cron scans every 10s.
+        // Rows transitioning to 'success'/'failed' drop out of the index automatically.
+        await this.sql`
+            CREATE INDEX IF NOT EXISTS idx_posts_pending_upload_post
+            ON posts(upload_post_submitted_at)
+            WHERE status = 'pending' AND upload_post_request_id IS NOT NULL
         `;
 
         await this.sql`
@@ -564,37 +638,125 @@ export class DatabaseService {
     }
 
     /**
-     * Update post status
+     * Update post status. When transitioning to 'failed', also clears the in-flight
+     * tracking columns so a stuck row's GCS resource pointer and pending user info
+     * get cleaned up. For other statuses the columns are left alone.
      */
     async updatePostStatus(postId: number, status: PostStatus): Promise<void> {
-        await this.sql`
-            UPDATE posts
-            SET status = ${status}, updated_at = NOW()
-            WHERE id = ${postId}
-        `;
+        if (status === 'failed') {
+            await this.sql`
+                UPDATE posts
+                SET status = ${status},
+                    edited_video_url = NULL,
+                    pending_user_id = NULL,
+                    pending_user_name = NULL,
+                    updated_at = NOW()
+                WHERE id = ${postId}
+            `;
+        } else {
+            await this.sql`
+                UPDATE posts
+                SET status = ${status}, updated_at = NOW()
+                WHERE id = ${postId}
+            `;
+        }
         logger.debug('Post status updated', { postId, status });
     }
 
     /**
-     * Update post with success status and Instagram post ID
+     * Update post with success status and Instagram post ID. Also clears the in-flight
+     * tracking columns (edited_video_url, pending_user_*) since they're no longer needed
+     * after the terminal transition. request_id and submitted_at are kept for audit trail.
      */
     async markPostSuccess(postId: number, instagramPostId: string | null): Promise<void> {
         await this.sql`
             UPDATE posts
-            SET status = 'success', instagram_post_id = ${instagramPostId}, updated_at = NOW()
+            SET status = 'success',
+                instagram_post_id = ${instagramPostId},
+                edited_video_url = NULL,
+                pending_user_id = NULL,
+                pending_user_name = NULL,
+                updated_at = NOW()
             WHERE id = ${postId}
         `;
         logger.debug('Post marked as success', { postId, instagramPostId });
     }
 
     /**
-     * Mark all pending posts as failed (used on startup/shutdown for crash recovery)
+     * Persist the Upload-Post request_id and submission timestamp on a post, along with
+     * the GCS edited video URL (so the status cron can clean it up on terminal transition)
+     * and the optional pending user info (so the status cron can create the user_posts
+     * row on success). All five fields are written in one UPDATE.
+     */
+    async markUploadPostSubmitting(
+        postId: number,
+        requestId: string,
+        editedVideoUrl: string,
+        pendingUserId?: string,
+        pendingUserName?: string,
+    ): Promise<void> {
+        await this.sql`
+            UPDATE posts
+            SET upload_post_request_id = ${requestId},
+                upload_post_submitted_at = NOW(),
+                edited_video_url = ${editedVideoUrl},
+                pending_user_id = ${pendingUserId ?? null},
+                pending_user_name = ${pendingUserName ?? null},
+                updated_at = NOW()
+            WHERE id = ${postId}
+        `;
+        logger.debug('Post marked as upload-post-submitting', { postId, requestId });
+    }
+
+    /**
+     * Returns all posts currently being tracked by the Upload-Post status cron:
+     * status='pending' AND a request_id has been persisted. The cron iterates these
+     * each tick and polls Upload-Post's /uploadposts/status endpoint.
+     */
+    async getPendingUploadPostPosts(): Promise<PendingUploadPostPost[]> {
+        return await this.sql`
+            SELECT id,
+                   upload_post_request_id,
+                   upload_post_submitted_at,
+                   edited_video_url,
+                   pending_user_id,
+                   pending_user_name
+            FROM posts
+            WHERE status = 'pending'
+              AND upload_post_request_id IS NOT NULL
+            ORDER BY upload_post_submitted_at ASC
+        ` as PendingUploadPostPost[];
+    }
+
+    /**
+     * Returns the full account row for a given post. Used by UploadPostStatusCronService
+     * to find both the gcs_bucket_name (for GCS cleanup) and the account_id (for credential lookup).
+     */
+    async getPostAccount(postId: number): Promise<DbAccount | null> {
+        const rows = await this.sql`
+            SELECT a.id, a.name, a.ig_access_token, a.ig_user_id, a.gcs_bucket_name, a.created_at
+            FROM accounts a
+            JOIN posts p ON p.account_id = a.id
+            WHERE p.id = ${postId}
+        ` as DbAccount[];
+        return rows.length > 0 ? rows[0] : null;
+    }
+
+    /**
+     * Crash-recovery: mark posts as failed if they're stuck in pending and either
+     *   (a) never got submitted to Upload-Post (no request_id), or
+     *   (b) have been awaiting Upload-Post for more than 1 hour (matches Upload-Post's own
+     *       "no activity for >1h → failed" rule).
+     * In-flight rows submitted less than 1h ago are left alone — the status cron will
+     * resume polling them.
      */
     async markPendingPostsAsFailed(): Promise<number> {
         const result = await this.sql`
             UPDATE posts
             SET status = 'failed', updated_at = NOW()
             WHERE status = 'pending'
+              AND (upload_post_request_id IS NULL
+                   OR upload_post_submitted_at < NOW() - INTERVAL '1 hour')
             RETURNING id
         ` as { id: number }[];
         const count = result.length;

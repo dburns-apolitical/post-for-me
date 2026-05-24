@@ -1,5 +1,14 @@
 import { logger } from '../utils/logger.js';
 
+export type UploadPostStatusResult =
+    | { status: 'pending' | 'queued' | 'processing' | 'in_progress'; raw: string; data: unknown }
+    | { status: 'completed'; instagramPostId: string | null; raw: string; data: unknown }
+    | { status: 'failed'; raw: string; data: unknown }
+    | { status: 'not_found' }
+    | { status: 'unknown'; raw: string; data: unknown };
+
+const IN_PROGRESS_STATUSES = new Set(['pending', 'queued', 'processing', 'in_progress']);
+
 export class UploadPostClientService {
     private baseUrl = 'https://api.upload-post.com/api';
 
@@ -9,147 +18,101 @@ export class UploadPostClientService {
     ) {}
 
     /**
-     * Post a video to Upload-Post platforms.
-     * Uses sync mode — Upload-Post auto-switches to async if >59s.
-     * If auto-switched, polls for completion.
-     * Never throws — returns { success: false } on error.
+     * Submit a video upload to Upload-Post with async_upload=true. The caller is responsible
+     * for persisting the requestId beforehand so the status cron can poll it. This method
+     * never polls — it returns once Upload-Post has accepted the submission (2xx) or throws
+     * on any failure. The X-Request-Id header makes the submission idempotent: if a network
+     * timeout causes a retry with the same requestId, Upload-Post returns the existing job
+     * rather than creating a duplicate.
      */
-    async postVideo(
-        videoUrl: string,
-        caption: string,
-        hashtags: string[],
-        platforms: string[]
-    ): Promise<{ success: boolean; requestId?: string; instagramPostId?: string }> {
-        try {
-            const hashtagString = hashtags.map((tag) => `#${tag}`).join(' ');
-            const fullCaption = `${caption}\n\n${hashtagString}`;
+    async postVideoAsync(opts: {
+        requestId: string;
+        videoUrl: string;
+        caption: string;
+        hashtags: string[];
+        platforms: string[];
+        shareToFeed?: boolean;
+    }): Promise<void> {
+        const hashtagString = opts.hashtags.map((tag) => `#${tag}`).join(' ');
+        const fullCaption = opts.hashtags.length > 0
+            ? `${opts.caption}\n\n${hashtagString}`
+            : opts.caption;
 
-            const formData = new FormData();
-            formData.append('user', this.user);
-            formData.append('video', videoUrl);
-            formData.append('title', fullCaption);
+        const formData = new FormData();
+        formData.append('user', this.user);
+        formData.append('video', opts.videoUrl);
+        formData.append('title', fullCaption);
+        formData.append('async_upload', 'true');
+        if (opts.shareToFeed !== undefined && opts.platforms.includes('instagram')) {
+            formData.append('share_to_feed', String(opts.shareToFeed));
+        }
+        for (const platform of opts.platforms) {
+            formData.append('platform[]', platform);
+        }
 
-            for (const platform of platforms) {
-                formData.append('platform[]', platform);
-            }
+        logger.info('Submitting video to Upload-Post (async)', {
+            user: this.user,
+            requestId: opts.requestId,
+            platforms: opts.platforms,
+            videoUrl: opts.videoUrl,
+        });
 
-            logger.info('Posting video to Upload-Post', {
-                user: this.user,
-                platforms,
-                videoUrl,
-            });
+        const response = await fetch(`${this.baseUrl}/upload`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Apikey ${this.apiKey}`,
+                'X-Request-Id': opts.requestId,
+            },
+            body: formData,
+        });
 
-            const response = await fetch(`${this.baseUrl}/upload`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Apikey ${this.apiKey}`,
-                },
-                body: formData,
-            });
-
-            const data = await response.json() as Record<string, unknown>;
-
-            if (!response.ok) {
-                logger.error('Upload-Post request failed', {
-                    status: response.status,
-                    response: data,
-                    platforms,
-                });
-                return { success: false };
-            }
-
-            const requestId = (data as { request_id?: string }).request_id;
-
-            // Check if Upload-Post auto-switched to async (returns request_id without results)
-            if (requestId && !data.results) {
-                logger.info('Upload-Post switched to async, polling for completion', {
-                    requestId,
-                    platforms,
-                });
-                return await this.pollForCompletion(requestId, platforms);
-            }
-
-            // Sync response — check per-platform results
-            logger.info('Upload-Post completed (sync)', {
+        if (!response.ok) {
+            let bodyText = '';
+            try { bodyText = JSON.stringify(await response.json()); } catch { /* ignore */ }
+            logger.error('Upload-Post submission failed', {
                 status: response.status,
-                platforms,
-                results: data.results,
-                response: data,
+                requestId: opts.requestId,
+                body: bodyText,
             });
-
-            const igResult = (data.results as Record<string, Record<string, unknown>> | undefined)?.instagram;
-            const instagramPostId = (igResult?.post_id ?? igResult?.publish_id) as string | undefined;
-            return { success: true, requestId: requestId || undefined, instagramPostId };
-        } catch (error) {
-            logger.error('Error calling Upload-Post API', {
-                error: error instanceof Error ? error.message : 'Unknown error',
-                platforms,
-            });
-            return { success: false };
+            throw new Error(`Upload-Post submission failed: ${response.status}`);
         }
     }
 
     /**
-     * Poll Upload-Post status endpoint until completion.
-     * Max 20 attempts with 15s intervals = 5 minutes.
+     * Fetch the current status of an async Upload-Post submission. Returns a typed result
+     * matching the documented top-level status field. Unrecognized statuses become
+     * `{ status: 'unknown' }` — the cron's caller treats this as no-op and lets the
+     * 1-hour safety net handle truly stuck requests.
      */
-    private async pollForCompletion(
-        requestId: string,
-        platforms: string[],
-        maxAttempts: number = 20,
-        intervalMs: number = 15000
-    ): Promise<{ success: boolean; requestId?: string; instagramPostId?: string }> {
-        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-            await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    async getUploadStatus(requestId: string): Promise<UploadPostStatusResult> {
+        const response = await fetch(
+            `${this.baseUrl}/uploadposts/status?request_id=${encodeURIComponent(requestId)}`,
+            { headers: { 'Authorization': `Apikey ${this.apiKey}` } }
+        );
 
-            try {
-                const response = await fetch(
-                    `${this.baseUrl}/uploadposts/status?request_id=${requestId}`,
-                    {
-                        headers: { 'Authorization': `Apikey ${this.apiKey}` },
-                    }
-                );
-
-                if (!response.ok) {
-                    logger.warn('Upload-Post status check failed', {
-                        requestId,
-                        status: response.status,
-                        attempt,
-                    });
-                    continue;
-                }
-
-                const data = await response.json() as Record<string, unknown>;
-                const status = data.status as string;
-
-                logger.info('Upload-Post status poll', {
-                    requestId,
-                    status,
-                    attempt,
-                    results: data.results,
-                });
-
-                if (status === 'completed') {
-                    const igResult = (data.results as Record<string, Record<string, unknown>> | undefined)?.instagram;
-                    const instagramPostId = (igResult?.post_id ?? igResult?.publish_id) as string | undefined;
-                    return { success: true, requestId, instagramPostId };
-                }
-
-                if (status !== 'pending' && status !== 'in_progress') {
-                    logger.error('Upload-Post unexpected status', { requestId, status, data });
-                    return { success: false, requestId, instagramPostId: undefined };
-                }
-            } catch (error) {
-                logger.warn('Upload-Post status poll error', {
-                    requestId,
-                    attempt,
-                    error: error instanceof Error ? error.message : 'Unknown error',
-                });
-            }
+        if (response.status === 404) {
+            return { status: 'not_found' };
+        }
+        if (!response.ok) {
+            logger.error('Upload-Post status fetch failed', { requestId, status: response.status });
+            throw new Error(`Upload-Post status fetch failed: ${response.status}`);
         }
 
-        logger.error('Upload-Post polling timed out', { requestId, maxAttempts, platforms });
-        return { success: false, requestId, instagramPostId: undefined };
+        const data = await response.json() as Record<string, unknown>;
+        const raw = String(data.status ?? '');
+
+        if (IN_PROGRESS_STATUSES.has(raw)) {
+            return { status: raw as 'pending' | 'queued' | 'processing' | 'in_progress', raw, data };
+        }
+        if (raw === 'completed') {
+            const igResult = (data.results as Record<string, Record<string, unknown>> | undefined)?.instagram;
+            const instagramPostId = (igResult?.post_id ?? igResult?.publish_id ?? null) as string | null;
+            return { status: 'completed', instagramPostId, raw, data };
+        }
+        if (raw === 'failed') {
+            return { status: 'failed', raw, data };
+        }
+        return { status: 'unknown', raw, data };
     }
 
     /**
