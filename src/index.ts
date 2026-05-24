@@ -23,6 +23,7 @@ import { ViewsSyncCronService } from './services/views-sync-cron.js';
 import { AgentEvalCronService } from './services/agent-eval-cron.js';
 import { ImpressionsSyncCronService } from './services/impressions-sync-cron.js';
 import { UploadPostStatusCronService } from './services/upload-post-status-cron.js';
+import { EditedVideoJanitorCronService } from './services/edited-video-janitor-cron.js';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -31,6 +32,7 @@ const db = new DatabaseService();
 const viewsSyncCron = new ViewsSyncCronService();
 const impressionsSyncCron = new ImpressionsSyncCronService();
 const uploadPostStatusCron = new UploadPostStatusCronService();
+const editedVideoJanitorCron = new EditedVideoJanitorCronService();
 const agentEvalCron = new AgentEvalCronService();
 
 /**
@@ -117,6 +119,9 @@ async function startup(): Promise<void> {
   // Start the Upload-Post status polling cron job
   uploadPostStatusCron.start();
 
+  // Start the GCS janitor for orphaned edited videos
+  editedVideoJanitorCron.start();
+
   // Start the weekly agent evaluation cron job
   agentEvalCron.start();
 
@@ -137,6 +142,9 @@ async function shutdown(signal: string): Promise<void> {
 
   // Stop the Upload-Post status polling cron job
   uploadPostStatusCron.stop();
+
+  // Stop the edited video janitor cron job
+  editedVideoJanitorCron.stop();
 
   // Stop the agent evaluation cron job
   agentEvalCron.stop();

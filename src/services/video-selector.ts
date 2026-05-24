@@ -254,6 +254,42 @@ export class VideoSelectorService {
     }
 
     /**
+     * List all objects under the `edited/` prefix with their creation timestamps.
+     * Handles pagination via `nextPageToken` so callers see every object regardless
+     * of bucket size. Used by the janitor cron to find orphaned edited videos.
+     */
+    async listEditedVideos(): Promise<Array<{ name: string; timeCreated: Date }>> {
+        const results: Array<{ name: string; timeCreated: Date }> = [];
+        let pageToken: string | undefined;
+
+        do {
+            const params = new URLSearchParams({ prefix: 'edited/' });
+            if (pageToken) {
+                params.set('pageToken', pageToken);
+            }
+            const url = `https://storage.googleapis.com/storage/v1/b/${this.bucketName}/o?${params.toString()}`;
+
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`Failed to list edited/ in bucket: ${response.status} ${response.statusText}`);
+            }
+
+            const data = await response.json() as {
+                items?: Array<{ name: string; timeCreated: string }>;
+                nextPageToken?: string;
+            };
+
+            for (const item of data.items ?? []) {
+                results.push({ name: item.name, timeCreated: new Date(item.timeCreated) });
+            }
+
+            pageToken = data.nextPageToken;
+        } while (pageToken);
+
+        return results;
+    }
+
+    /**
      * Delete an edited video from GCS by its public URL
      * Called after Instagram has successfully fetched the video
      */
