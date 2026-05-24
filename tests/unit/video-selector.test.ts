@@ -225,6 +225,109 @@ describe('VideoSelectorService', () => {
     });
   });
 
+  describe('listEditedVideos', () => {
+    test('returns objects under edited/ with their timeCreated parsed to Date', async () => {
+      const service = new VideoSelectorService('test-bucket');
+
+      const originalFetch = global.fetch;
+      const mockFetchFn = mock(() => Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          items: [
+            { name: 'edited/abc.mp4', timeCreated: '2025-01-01T00:00:00Z' },
+            { name: 'edited/def.mp4', timeCreated: '2025-01-02T03:04:05Z' },
+          ],
+        }),
+      }) as unknown as ReturnType<typeof fetch>);
+      global.fetch = mockFetchFn as unknown as typeof fetch;
+
+      try {
+        const result = await service.listEditedVideos();
+
+        expect(result).toEqual([
+          { name: 'edited/abc.mp4', timeCreated: new Date('2025-01-01T00:00:00Z') },
+          { name: 'edited/def.mp4', timeCreated: new Date('2025-01-02T03:04:05Z') },
+        ]);
+
+        // First call must scope listing to edited/ via the prefix param.
+        const call = mockFetchFn.mock.calls[0] as unknown as [string];
+        expect(call[0]).toContain('/b/test-bucket/o');
+        expect(call[0]).toContain('prefix=edited%2F');
+      } finally {
+        global.fetch = originalFetch;
+      }
+    });
+
+    test('returns empty array when bucket has no edited/ objects', async () => {
+      const service = new VideoSelectorService('test-bucket');
+
+      const originalFetch = global.fetch;
+      global.fetch = mock(() => Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({}), // GCS omits `items` when empty
+      }) as unknown as ReturnType<typeof fetch>) as unknown as typeof fetch;
+
+      try {
+        const result = await service.listEditedVideos();
+        expect(result).toEqual([]);
+      } finally {
+        global.fetch = originalFetch;
+      }
+    });
+
+    test('follows nextPageToken across pages and concatenates results', async () => {
+      const service = new VideoSelectorService('test-bucket');
+
+      const originalFetch = global.fetch;
+      const mockFetchFn = mock((url: string) => {
+        if (!url.includes('pageToken=')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({
+              items: [{ name: 'edited/page1.mp4', timeCreated: '2025-01-01T00:00:00Z' }],
+              nextPageToken: 'TOKEN-2',
+            }),
+          }) as unknown as ReturnType<typeof fetch>;
+        }
+        // Second page: explicit token, no further nextPageToken.
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            items: [{ name: 'edited/page2.mp4', timeCreated: '2025-01-02T00:00:00Z' }],
+          }),
+        }) as unknown as ReturnType<typeof fetch>;
+      });
+      global.fetch = mockFetchFn as unknown as typeof fetch;
+
+      try {
+        const result = await service.listEditedVideos();
+        expect(result.map((r) => r.name)).toEqual(['edited/page1.mp4', 'edited/page2.mp4']);
+        expect(mockFetchFn).toHaveBeenCalledTimes(2);
+        const secondCall = mockFetchFn.mock.calls[1] as unknown as [string];
+        expect(secondCall[0]).toContain('pageToken=TOKEN-2');
+      } finally {
+        global.fetch = originalFetch;
+      }
+    });
+
+    test('throws when GCS list request fails', async () => {
+      const service = new VideoSelectorService('test-bucket');
+
+      const originalFetch = global.fetch;
+      global.fetch = mock(() => Promise.resolve({
+        ok: false,
+        status: 500,
+        statusText: 'Internal Server Error',
+      }) as unknown as ReturnType<typeof fetch>) as unknown as typeof fetch;
+
+      try {
+        await expect(service.listEditedVideos()).rejects.toThrow();
+      } finally {
+        global.fetch = originalFetch;
+      }
+    });
+  });
+
   describe('findVideoByTitle', () => {
     test('should return video when title matches exactly', async () => {
       const service = new VideoSelectorService('test-bucket');
