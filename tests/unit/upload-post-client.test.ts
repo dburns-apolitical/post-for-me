@@ -219,14 +219,17 @@ describe('UploadPostClientService', () => {
             }
         });
 
-        test('returns completed with extracted instagramPostId from results.instagram.post_id', async () => {
+        test('returns completed with instagramPostId from the instagram entry in the results array', async () => {
             globalThis.fetch = mock(() => Promise.resolve({
                 ok: true,
                 status: 200,
                 json: () => Promise.resolve({
                     request_id: 'r',
                     status: 'completed',
-                    results: { instagram: { post_id: 'ig-123', success: true } },
+                    results: [
+                        { platform: 'youtube', success: true, platform_post_id: 'yt-1' },
+                        { platform: 'instagram', success: true, platform_post_id: '17881308174437163' },
+                    ],
                 }),
             })) as typeof fetch;
 
@@ -235,18 +238,18 @@ describe('UploadPostClientService', () => {
 
             expect(result.status).toBe('completed');
             if (result.status === 'completed') {
-                expect(result.instagramPostId).toBe('ig-123');
+                expect(result.instagramPostId).toBe('17881308174437163');
             }
         });
 
-        test('falls back to publish_id when post_id is absent in completed response', async () => {
+        test('returns completed with instagramPostId=null when instagram is absent from results', async () => {
             globalThis.fetch = mock(() => Promise.resolve({
                 ok: true,
                 status: 200,
                 json: () => Promise.resolve({
                     request_id: 'r',
                     status: 'completed',
-                    results: { instagram: { publish_id: 'pub-999' } },
+                    results: [{ platform: 'tiktok', success: true, platform_post_id: 'tt-1' }],
                 }),
             })) as typeof fetch;
 
@@ -255,18 +258,17 @@ describe('UploadPostClientService', () => {
 
             expect(result.status).toBe('completed');
             if (result.status === 'completed') {
-                expect(result.instagramPostId).toBe('pub-999');
+                expect(result.instagramPostId).toBeNull();
             }
         });
 
-        test('returns completed with instagramPostId=null when instagram is absent', async () => {
+        test('returns completed with instagramPostId=null when results is missing', async () => {
             globalThis.fetch = mock(() => Promise.resolve({
                 ok: true,
                 status: 200,
                 json: () => Promise.resolve({
                     request_id: 'r',
                     status: 'completed',
-                    results: { tiktok: { success: true } },
                 }),
             })) as typeof fetch;
 

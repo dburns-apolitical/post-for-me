@@ -105,8 +105,11 @@ export class UploadPostClientService {
             return { status: raw as 'pending' | 'queued' | 'processing' | 'in_progress', raw, data };
         }
         if (raw === 'completed') {
-            const igResult = (data.results as Record<string, Record<string, unknown>> | undefined)?.instagram;
-            const instagramPostId = (igResult?.post_id ?? igResult?.publish_id ?? null) as string | null;
+            const results = Array.isArray(data.results)
+                ? (data.results as Array<Record<string, unknown>>)
+                : [];
+            const igResult = results.find((r) => r.platform === 'instagram');
+            const instagramPostId = (igResult?.platform_post_id ?? null) as string | null;
             return { status: 'completed', instagramPostId, raw, data };
         }
         if (raw === 'failed') {
